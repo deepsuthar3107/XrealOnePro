@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,6 +8,7 @@ public class InspectionCheckList : MonoBehaviour
 
     private List<GameObject> Tick = new List<GameObject>();
     private int currentCheckListNo = 0;
+    bool isReady = true;
 
     private void Awake()
     {
@@ -37,12 +39,51 @@ public class InspectionCheckList : MonoBehaviour
             Debug.LogWarning("No more checklist items left.");
             return;
         }
+      
 
-        // Activate current tick
-        Tick[currentCheckListNo].SetActive(true);
+        if (isReady)
+        {  
+            // Activate current tick
+            Tick[currentCheckListNo].SetActive(true);
 
-        // Move to next
-        currentCheckListNo++;
+            // Move to next
+            currentCheckListNo++;
+
+            isReady = false;
+            StartCoroutine(WaitForTickOption());
+        }
+    }
+
+    [ContextMenu("SkipTick")]
+    public void SkipTick()
+    {
+        // Don't continue if UI hidden
+        if (!gameObject.activeInHierarchy) return;
+
+        // Safety check
+        if (currentCheckListNo < 0 || currentCheckListNo >= Tick.Count)
+        {
+            Debug.LogWarning("No more checklist items left.");
+            return;
+        }
+
+
+        if (isReady)
+        {
+            // Activate current tick
+            Tick[currentCheckListNo+1].SetActive(true);
+
+            // Move to next
+            currentCheckListNo++;
+
+            isReady = false;
+            StartCoroutine(WaitForTickOption());
+        }
+    }
+    IEnumerator WaitForTickOption()
+    {
+        yield return new WaitForSeconds(.5f);
+        isReady = true;
     }
 
     // OPTIONAL: Reset checklist before reuse
