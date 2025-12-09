@@ -1,100 +1,176 @@
-﻿using TMPro;
-using Unity.XR.XREAL.Samples;
+﻿using System.Text.RegularExpressions;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Whisper;
 using Whisper.Utils;
 
-namespace Whisper.Samples
+public class StreamingSampleMic : MonoBehaviour
 {
-    /// <summary>
-    /// Stream transcription from microphone input.
-    /// </summary>
-    public class StreamingSampleMic : MonoBehaviour
+    [Header("Whisper")]
+    public WhisperManager whisper;
+    public MicrophoneRecord microphoneRecord;
+
+    [Header("UI")]
+    public Button button;
+    public Text buttonText;
+    public TextMeshProUGUI text;
+    public ScrollRect scroll;
+
+    [Header("Commands")]
+    public CommandData[] CommandData;
+
+    private WhisperStream stream;
+
+    private async void Start()
     {
-        public WhisperManager whisper;
-        public MicrophoneRecord microphoneRecord;
-    
-        [Header("UI")] 
-        public Button button;
-        public Text buttonText;
-        public TextMeshProUGUI text;
-        public ScrollRect scroll;
-        private WhisperStream _stream;
-       
-        public CommandData[] CommandData;
-        private async void Start()
-        {
-            _stream = await whisper.CreateStream(microphoneRecord);
-            _stream.OnResultUpdated += OnResult;
-            _stream.OnSegmentUpdated += OnSegmentUpdated;
-            _stream.OnSegmentFinished += OnSegmentFinished;
-            _stream.OnStreamFinished += OnFinished;
+        await CreateNewStream();
 
-            microphoneRecord.OnRecordStop += OnRecordStop;
-            button.onClick.AddListener(OnButtonPressed);
+        microphoneRecord.OnRecordStop += OnRecordStop;
+        button.onClick.AddListener(OnButtonPressed);
+    }
+
+    private async System.Threading.Tasks.Task CreateNewStream()
+    {
+        // Stop previous stream if it exists
+        if (stream != null)
+            stream.StopStream();
+
+        // Create a fresh one
+        stream = await whisper.CreateStream(microphoneRecord);
+
+        // Reassign callbacks
+        stream.OnSegmentFinished += OnSegmentFinished;
+        stream.OnStreamFinished += OnStreamFinished;
+    }
+
+
+    private async void OnButtonPressed()
+    {
+        if (!microphoneRecord.IsRecording)
+        {
+            await CreateNewStream();
+
+            stream.StartStream();
+            microphoneRecord.StartRecord();
+            buttonText.text = "Stop";
         }
-
-        public void OnButtonPressed()
+        else
         {
-            if (!microphoneRecord.IsRecording)
+            microphoneRecord.StopRecord();
+        }
+    }
+
+    private void OnRecordStop(AudioChunk recordedAudio)
+    {
+        buttonText.text = "Record";
+    }
+
+    private void OnSegmentFinished(WhisperResult result)
+    {
+        if (string.IsNullOrEmpty(result.Result)) return;
+
+        text.text = result.Result;
+        UiUtils.ScrollDown(scroll);
+
+        HandleCommands(result.Result);
+    }
+
+    private void OnStreamFinished(string finalResult)
+    {
+        Debug.Log("Mic stream finished.");
+    }
+
+    // --------------------------------------------------------------
+    // COMMAND HANDLING
+    // --------------------------------------------------------------
+
+    private void HandleCommands(string raw)
+    {
+        string spoken = Normalize(raw);
+
+        foreach (var data in CommandData)
+        {
+            foreach (string cmd in data.commands)
             {
-                _stream.StartStream();
-                microphoneRecord.StartRecord();
-            }
-            else
-                microphoneRecord.StopRecord();
-        
-            buttonText.text = microphoneRecord.IsRecording ? "Stop" : "Record";
-        }
-    
-        private void OnRecordStop(AudioChunk recordedAudio)
-        {
-            buttonText.text = "Record";
-        }
+                if (string.IsNullOrEmpty(cmd))
+                    continue;
 
-        private void OnResult(string result)
-        {
-            text.text = result;
-            UiUtils.ScrollDown(scroll);
+                string normalizedCmd = Normalize(cmd);
 
-            if (string.IsNullOrEmpty(result)) return;
-
-            result = result.ToLower();
-
-            // Check all CommandData entries
-            foreach (var data in CommandData)
-            {
-                foreach (var cmd in data.commands)
+                // Exact or contained match
+                if (spoken.Contains(normalizedCmd))
                 {
-                    if (string.IsNullOrEmpty(cmd)) continue;
+                    Debug.Log($"Command matched (exact): {cmd}");
+                    data.Event?.Invoke();
+                    return;
+                }
 
-                    string lowerCmd = cmd.ToLower();
-
-                    // Match spoken text with command
-                    if (result.Contains(lowerCmd))
-                    {
-                        Debug.Log($"Command matched: {data.CommandGroupName} → {cmd}");
-                        data.Event?.Invoke();
-                        return; // stop after first match
-                    }
+                // Optional fuzzy matching (tolerates slight errors)
+                if (IsFuzzyMatch(spoken, normalizedCmd))
+                {
+                    Debug.Log($"Command matched (fuzzy): {cmd}");
+                    data.Event?.Invoke();
+                    return;
                 }
             }
         }
+    }
 
+    // Normalize text for consistent matching
+    private string Normalize(string input)
+    {
+        string lower = input.ToLower();
 
-        private void OnSegmentUpdated(WhisperResult segment)
+        // Remove punctuation
+        lower = Regex.Replace(lower, "[^a-z0-9 ]+", " ");
+
+        // Remove multiple spaces
+        lower = Regex.Replace(lower, " +", " ").Trim();
+
+        return lower;
+    }
+
+    // Fuzzy matching for near-matches ("jump", "jum", "jump now", "jumping")
+    private bool IsFuzzyMatch(string spoken, string command)
+    {
+        // Very simple rule: spoken contains a word with small edit distance to command
+        string[] words = spoken.Split(' ');
+
+        foreach (string w in words)
         {
-            print($"Segment updated: {segment.Result}");
+            int dist = LevenshteinDistance(w, command);
+
+            if (dist <= 1) return true; // allow 1-letter error
         }
-        
-        private void OnSegmentFinished(WhisperResult segment)
+
+        return false;
+    }
+
+    // Levenshtein Distance algorithm
+    private int LevenshteinDistance(string a, string b)
+    {
+        if (string.IsNullOrEmpty(a)) return b.Length;
+        if (string.IsNullOrEmpty(b)) return a.Length;
+
+        int[,] d = new int[a.Length + 1, b.Length + 1];
+
+        for (int i = 0; i <= a.Length; i++) d[i, 0] = i;
+        for (int j = 0; j <= b.Length; j++) d[0, j] = j;
+
+        for (int i = 1; i <= a.Length; i++)
         {
-            print($"Segment finished: {segment.Result}");
+            for (int j = 1; j <= b.Length; j++)
+            {
+                int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+
+                d[i, j] = Mathf.Min(
+                    d[i - 1, j] + 1,
+                    d[i, j - 1] + 1,
+                    d[i - 1, j - 1] + cost
+                );
+            }
         }
-        
-        private void OnFinished(string finalResult)
-        {
-            print("Stream finished!");
-        }
+        return d[a.Length, b.Length];
     }
 }
