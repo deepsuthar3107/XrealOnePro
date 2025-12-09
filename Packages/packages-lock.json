@@ -231,8 +231,14 @@
       },
       "url": "https://packages.unity.com"
     },
+    "com.whisper.unity": {
+      "version": "file:com.whisper.unity",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.xreal.xr": {
-      "version": "file:C:/Users/USE/Downloads/com.xreal.xr (2).tar.gz",
+      "version": "file:E:/Unity Works/Xreal/com.xreal.xr.tar.gz",
       "depth": 0,
       "source": "local-tarball",
       "dependencies": {

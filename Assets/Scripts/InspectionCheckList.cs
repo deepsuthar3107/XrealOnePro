@@ -30,63 +30,65 @@ public class InspectionCheckList : MonoBehaviour
     [ContextMenu("DoNextTick")]
     public void DoNextTick()
     {
-        // Don't continue if UI hidden
         if (!gameObject.activeInHierarchy) return;
 
-        // Safety check
-        if (currentCheckListNo < 0 || currentCheckListNo >= Tick.Count)
+        if (!isReady || currentCheckListNo >= Tick.Count)
         {
-            Debug.LogWarning("No more checklist items left.");
+            Debug.LogWarning("No more checklist items.");
             return;
         }
-      
 
-        if (isReady)
-        {  
-            // Activate current tick
-            Tick[currentCheckListNo].SetActive(true);
+        Tick[currentCheckListNo].SetActive(true);
+        currentCheckListNo++;
 
-            // Move to next
-            currentCheckListNo++;
+        StartCoroutine(SetReadyAfterDelay());
+    }
 
-            isReady = false;
-            StartCoroutine(WaitForTickOption());
+    [ContextMenu("DoPreviousTick")]
+    public void DoPreviousTick()
+    {
+        if (!gameObject.activeInHierarchy) return;
+
+        if (!isReady || currentCheckListNo <= 0)
+        {
+            Debug.LogWarning("Already at beginning.");
+            return;
         }
+
+        // Move back one
+        currentCheckListNo--;
+        Tick[currentCheckListNo].SetActive(false);
+
+        StartCoroutine(SetReadyAfterDelay());
     }
 
     [ContextMenu("SkipTick")]
     public void SkipTick()
     {
-        // Don't continue if UI hidden
         if (!gameObject.activeInHierarchy) return;
 
-        // Safety check
-        if (currentCheckListNo < 0 || currentCheckListNo >= Tick.Count)
+        if (!isReady || currentCheckListNo >= Tick.Count - 1)
         {
-            Debug.LogWarning("No more checklist items left.");
+            Debug.LogWarning("Cannot skip, at end.");
             return;
         }
 
+        // Skip current and activate next
+        currentCheckListNo++;
+        Tick[currentCheckListNo].SetActive(true);
 
-        if (isReady)
-        {
-            // Activate current tick
-            Tick[currentCheckListNo+1].SetActive(true);
+        currentCheckListNo++;  // move pointer forward again
 
-            // Move to next
-            currentCheckListNo++;
-
-            isReady = false;
-            StartCoroutine(WaitForTickOption());
-        }
+        StartCoroutine(SetReadyAfterDelay());
     }
-    IEnumerator WaitForTickOption()
+
+    IEnumerator SetReadyAfterDelay()
     {
-        yield return new WaitForSeconds(.5f);
+        isReady = false;
+        yield return new WaitForSeconds(0.5f);
         isReady = true;
     }
 
-    // OPTIONAL: Reset checklist before reuse
     [ContextMenu("ResetChecklist")]
     public void ResetChecklist()
     {
@@ -94,5 +96,6 @@ public class InspectionCheckList : MonoBehaviour
             t.SetActive(false);
 
         currentCheckListNo = 0;
+        isReady = true;
     }
 }
