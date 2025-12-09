@@ -1,6 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Android;
 using UnityEngine.UI;
 using Whisper;
 using Whisper.Utils;
@@ -24,7 +25,12 @@ public class StreamingSampleMic : MonoBehaviour
 
     private async void Start()
     {
-        await CreateNewStream();
+        if (!Permission.HasUserAuthorizedPermission(Permission.Microphone))
+        {
+            Permission.RequestUserPermission(Permission.Microphone);
+        }
+
+            await CreateNewStream();
 
         microphoneRecord.OnRecordStop += OnRecordStop;
         button.onClick.AddListener(OnButtonPressed);
