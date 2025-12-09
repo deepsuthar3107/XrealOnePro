@@ -2609,7 +2609,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &364356298
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2802,7 +2802,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &380441881
 RectTransform:
   m_ObjectHideFlags: 0
@@ -5204,7 +5204,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &836336559
 RectTransform:
   m_ObjectHideFlags: 0
@@ -5400,7 +5400,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &845570345
 RectTransform:
   m_ObjectHideFlags: 0
@@ -7907,6 +7907,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: van 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 3675a0bf394ca5c459df6f637b4a36e2,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -11399,7 +11404,7 @@ MonoBehaviour:
   m_PreviewRawImage: {fileID: 104692111}
   blendMode: 0
   resolutionLevel: 1
-  audioState: 1
+  audioState: 2
   captureside: 0
   useGreenBackGround: 0
 --- !u!114 &2047369843
@@ -11448,6 +11453,7 @@ MonoBehaviour:
     - tart recording
     - true video start inspection
     - start
+    - start inspection
     onDetected:
       m_PersistentCalls:
         m_Calls:
@@ -11472,6 +11478,8 @@ MonoBehaviour:
     - and recording
     - complete inspection
     - stop
+    - end
+    - and
     onDetected:
       m_PersistentCalls:
         m_Calls:
@@ -11492,9 +11500,8 @@ MonoBehaviour:
     commands:
     - show checklist
     - so checklist
-    - on checklist
+    - view checklist
     - active checklist
-    - check
     onDetected:
       m_PersistentCalls:
         m_Calls:
@@ -11515,7 +11522,6 @@ MonoBehaviour:
     commands:
     - hide checklist
     - disable checklist
-    - off checklist
     - hide
     onDetected:
       m_PersistentCalls:
@@ -11536,9 +11542,10 @@ MonoBehaviour:
   - commandName: Do Checklist
     commands:
     - next step
-    - do next
     - next app
     - next
+    - check
+    - mark
     onDetected:
       m_PersistentCalls:
         m_Calls:
@@ -11577,7 +11584,7 @@ MonoBehaviour:
   - commandName: reset checklist
     commands:
     - reset
-    - undo
+    - clear all
     onDetected:
       m_PersistentCalls:
         m_Calls:
@@ -11682,7 +11689,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -47.699997, y: -37.40001}
+  m_AnchoredPosition: {x: -47.699997, y: 107.8}
   m_SizeDelta: {x: 195.4, y: 50.600006}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &2065167580
