@@ -38,7 +38,7 @@ namespace OpenAI
         /// OpenAI API base path for requests.
         private const string BASE_PATH = "https://api.openai.com/v1";
 
-        public OpenAIApi(string apiKey = "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", string organization = null)
+        public OpenAIApi(string apiKey = "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", string organization = null)
         {
             if (apiKey != null)
             {
