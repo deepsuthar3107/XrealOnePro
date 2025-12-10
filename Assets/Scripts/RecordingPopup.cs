@@ -63,7 +63,7 @@ public class RecordingPopup : MonoBehaviour
     {
         // ---- Fade In ----
         float a = 0f;
-        float target = 0.8f;
+        float target = 0.9f;
 
         while (a < target)
         {
@@ -105,7 +105,7 @@ public class RecordingPopup : MonoBehaviour
 
         _RecordingPopup.SetActive(true);
         if (canvasGroup != null)
-            canvasGroup.alpha = 0.8f;
+            canvasGroup.alpha = 0.9f;
 
 
         _RecordingUI.SetActive(false);
