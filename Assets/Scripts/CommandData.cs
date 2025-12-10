@@ -2,7 +2,7 @@ using System;
 using UnityEngine.Events;
 
 [Serializable]
-public struct CommandData 
+public struct _CommandData 
 {
     public string CommandGroupName;
 

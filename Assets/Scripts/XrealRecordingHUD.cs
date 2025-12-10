@@ -7,6 +7,7 @@ using System;
 public class XrealRecordingHUD : MonoBehaviour
 {
     public CaptureExample capture;   // Drag CaptureExample object here
+    public GameObject RecordingUI;
 
     [Header("UI")]
     public TextMeshProUGUI duration;
@@ -24,6 +25,8 @@ public class XrealRecordingHUD : MonoBehaviour
         duration.text = "";
         if (timestamp != null)
             timestamp.text = "";
+
+        RecordingUI.SetActive(false);
     }
 
     void Update()
@@ -44,6 +47,7 @@ public class XrealRecordingHUD : MonoBehaviour
                 elapsedTime += Time.deltaTime;
                 duration.text = FormatTime(elapsedTime);
             }
+            RecordingUI.SetActive(true);
         }
         else
         {
@@ -51,6 +55,7 @@ public class XrealRecordingHUD : MonoBehaviour
             elapsedTime = 0;
             duration.text = "";
             timestamp.text = "";
+            RecordingUI.SetActive(false);
         }
     }
 

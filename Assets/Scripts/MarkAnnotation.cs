@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+
 public class MarkAnnotation : MonoBehaviour
 {
     public Transform startPoint;
@@ -6,36 +7,33 @@ public class MarkAnnotation : MonoBehaviour
     public float maxDistance = 2f;
     public GameObject SquareAnnotation;
     public GameObject CircleAnnotation;
+    public float annotationCheckRadius = 0.05f; // configurable radius
 
     private AnnotationShape currentAnnotation;
 
     private void Update()
     {
         Ray ray = new Ray(startPoint.position, startPoint.forward);
+        bool hitSomething = Physics.Raycast(ray, out RaycastHit hit, maxDistance);
 
-        if (Physics.Raycast(ray, out RaycastHit hit, maxDistance))
+        Debug.DrawRay(ray.origin, ray.direction * maxDistance, hitSomething ? Color.green : Color.red);
+
+        if (hitSomething)
         {
-            Debug.DrawRay(ray.origin, ray.direction * maxDistance, Color.green);
-
             AnnotationShape newAnnotation = hit.collider.GetComponent<AnnotationShape>();
 
             if (newAnnotation != null)
             {
-                // Deselect previous annotation if different
                 if (currentAnnotation != null && currentAnnotation != newAnnotation)
                     currentAnnotation.DeselectAnnotation();
 
                 currentAnnotation = newAnnotation;
                 currentAnnotation.SelectAnnotation();
-                return;
+                return; // exit Update if we hit a valid annotation
             }
         }
-        else
-        {
-            Debug.DrawRay(ray.origin, ray.direction * maxDistance, Color.red);
-        }
 
-        // Deselect previous annotation if nothing hit
+        // Deselect previous annotation if nothing hit or hit non-annotation
         if (currentAnnotation != null)
         {
             currentAnnotation.DeselectAnnotation();
@@ -46,30 +44,25 @@ public class MarkAnnotation : MonoBehaviour
     [ContextMenu("MarkSquare")]
     public void MarkSquare()
     {
-        if (!IsAnnotationAtEndPoint())
-        {
-            Instantiate(
-                SquareAnnotation,
-                endPoint.position,
-                Quaternion.LookRotation(startPoint.forward)
-            );
-        }
-        else
-        {
-            Debug.Log("Annotation already exists here. Not spawning.");
-        }
+        SpawnAnnotation(SquareAnnotation);
     }
 
     [ContextMenu("MarkCircle")]
     public void MarkCircle()
     {
+        SpawnAnnotation(CircleAnnotation);
+    }
+
+    private void SpawnAnnotation(GameObject annotationPrefab)
+    {
         if (!IsAnnotationAtEndPoint())
         {
-            Instantiate(
-                CircleAnnotation,
-                endPoint.position,
-                Quaternion.LookRotation(startPoint.forward)
-            );
+            // Align with surface normal if you hit something, else use forward
+            Quaternion rotation = startPoint.forward != Vector3.zero
+                ? Quaternion.LookRotation(startPoint.forward)
+                : Quaternion.identity;
+
+            Instantiate(annotationPrefab, endPoint.position, rotation);
         }
         else
         {
@@ -77,10 +70,9 @@ public class MarkAnnotation : MonoBehaviour
         }
     }
 
-    // Check if there's already an annotation at the spawn point
     private bool IsAnnotationAtEndPoint()
     {
-        Collider[] colliders = Physics.OverlapSphere(endPoint.position, 0.05f); // small radius
+        Collider[] colliders = Physics.OverlapSphere(endPoint.position, annotationCheckRadius);
         foreach (var col in colliders)
         {
             if (col.GetComponent<AnnotationShape>() != null)

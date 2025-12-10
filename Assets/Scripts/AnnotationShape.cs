@@ -9,7 +9,9 @@ public class AnnotationShape : MonoBehaviour
 
     Vector3 defaultScale;
     Color defaultColor;
-    
+
+    [HideInInspector]
+    public bool isSelected;
     private void Awake()
     {
         defaultScale = transform.localScale;
@@ -21,6 +23,7 @@ public class AnnotationShape : MonoBehaviour
     {
         transform.localScale = defaultScale * selectionScaleThresold;
         GetComponent<SpriteRenderer>().color = SelectionColor;
+        isSelected = true;
     }
 
     [ContextMenu("DeselectAnnotation")]
@@ -28,5 +31,6 @@ public class AnnotationShape : MonoBehaviour
     {
         transform.localScale = defaultScale;
         GetComponent <SpriteRenderer>().color = defaultColor;
+        isSelected = false;
     }
 }
