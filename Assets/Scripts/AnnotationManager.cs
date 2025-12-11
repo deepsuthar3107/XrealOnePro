@@ -30,4 +30,18 @@ public class AnnotationManager : MonoBehaviour
             activeAnnotation = null;
         }
     }
+
+    public void deleteAnnotationAll()
+    {
+        // Reset
+        activeAnnotation = null;
+
+        // Get all annotation shapes in scene
+        annotationShape = new List<AnnotationShape>(FindObjectsOfType<AnnotationShape>());
+
+        foreach (var shape in annotationShape)
+        {
+            Destroy(shape.gameObject);
+        }
+    }
 }
