@@ -38,7 +38,11 @@ namespace OpenAI
         /// OpenAI API base path for requests.
         private const string BASE_PATH = "https://api.openai.com/v1";
 
+<<<<<<< Updated upstream
         public OpenAIApi(string apiKey = "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", string organization = null)
+=======
+        public OpenAIApi(string apiKey = "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", string organization = null)
+>>>>>>> Stashed changes
         {
             if (apiKey != null)
             {

@@ -1728,6 +1728,64 @@ MonoBehaviour:
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []
+--- !u!1 &184662020
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 184662021}
+  - component: {fileID: 184662022}
+  m_Layer: 0
+  m_Name: New_Whisper
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &184662021
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184662020}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.151304, y: 1.5652925, z: 1025.7867}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &184662022
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184662020}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 878a2a798ffca854fa25a18b03034471, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  openAIApiKey: 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
+  whisperModel: whisper-1
+  debugMode: 1
+  voiceThreshold: 0.02
+  silenceThreshold: 0.0125
+  silenceDuration: 1
+  minRecordingDuration: 0.5
+  maxRecordingDuration: 10
+  sampleRate: 50000
+  commandGroups:
+  - groupName: 
+    commands: []
+  statusText: {fileID: 1031407259}
+  debugText: {fileID: 1086108116}
 --- !u!1 &206124031
 GameObject:
   m_ObjectHideFlags: 0
@@ -7167,7 +7225,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &948247529
 Transform:
   m_ObjectHideFlags: 0
@@ -7393,13 +7451,19 @@ MonoBehaviour:
             m_StringArgument: 
             m_BoolArgument: 0
           m_CallState: 2
+  openAiApiKey: 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
   sampleRate: 16000
-  chunkDuration: 1
-  silenceThreshold: 0.01
+  chunkDuration: 3
+  silenceThreshold: 0.05
   maxConcurrentRequests: 2
   minAudioLength: 0.5
   commandCooldown: 2
   simulateInEditor: 0
+  usePromptHints: 1
+  minConfidenceLevel: 0.2
+  filterHallucinations: 1
+  requestMicPermissionOnStart: 1
+  androidSampleRate: 16000
 --- !u!1 &950605612
 GameObject:
   m_ObjectHideFlags: 0
@@ -14907,3 +14971,4 @@ SceneRoots:
   - {fileID: 2047369841}
   - {fileID: 1543881888}
   - {fileID: 948247529}
+  - {fileID: 184662021}

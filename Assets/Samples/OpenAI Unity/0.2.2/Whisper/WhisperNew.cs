@@ -161,6 +161,7 @@ namespace Samples.Whisper
 #if UNITY_ANDROID && !UNITY_EDITOR
         private void RequestMicrophonePermission()
         {
+<<<<<<< Updated upstream
             Debug.Log(":iphone: Checking microphone permission...");
             UpdateStatus(":iphone: Checking permission");
             if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
@@ -168,27 +169,55 @@ namespace Samples.Whisper
                 Debug.Log(":iphone: Requesting microphone permission...");
                 UpdateStatus(":iphone: Grant permission");
                 UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Microphone);
+=======
+            Debug.Log("📱 Checking microphone permission...");
+            UpdateStatus("📱 Checking permission");
+            
+            if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
+            {
+                Debug.Log("📱 Requesting microphone permission...");
+                UpdateStatus("📱 Grant permission");
+                UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Microphone);
+                
+>>>>>>> Stashed changes
                 // Start coroutine to check permission after request
                 StartCoroutine(CheckPermissionAfterRequest());
             }
             else
             {
+<<<<<<< Updated upstream
                 Debug.Log(":white_check_mark: Microphone permission already granted");
+=======
+                Debug.Log("✅ Microphone permission already granted");
+>>>>>>> Stashed changes
                 micPermissionGranted = true;
                 InitializeMicrophone();
             }
         }
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
         private System.Collections.IEnumerator CheckPermissionAfterRequest()
         {
             // Wait a frame for the permission dialog
             yield return new WaitForSeconds(0.5f);
+<<<<<<< Updated upstream
             // Check periodically if permission was granted
             int maxAttempts = 20; // Check for up to 10 seconds
             int attempts = 0;
+=======
+            
+            // Check periodically if permission was granted
+            int maxAttempts = 20; // Check for up to 10 seconds
+            int attempts = 0;
+            
+>>>>>>> Stashed changes
             while (attempts < maxAttempts)
             {
                 if (UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
                 {
+<<<<<<< Updated upstream
                     Debug.Log(":white_check_mark: Microphone permission granted");
                     micPermissionGranted = true;
                     UpdateStatus(":white_check_mark: Permission granted");
@@ -202,6 +231,24 @@ namespace Samples.Whisper
             Debug.LogWarning(":x: Microphone permission denied or timed out");
             UpdateStatus(":x: Permission denied");
             toggleListeningButton.interactable = false;
+=======
+                    Debug.Log("✅ Microphone permission granted");
+                    micPermissionGranted = true;
+                    UpdateStatus("✅ Permission granted");
+                    InitializeMicrophone();
+                    yield break;
+                }
+                
+                yield return new WaitForSeconds(0.5f);
+                attempts++;
+            }
+            
+            // Permission was denied or dialog dismissed
+            Debug.LogWarning("❌ Microphone permission denied or timed out");
+            UpdateStatus("❌ Permission denied");
+            toggleListeningButton.interactable = false;
+            
+>>>>>>> Stashed changes
             if (message != null)
             {
                 message.text = "Microphone permission required. Please restart and grant permission.";
