@@ -6,82 +6,90 @@ public class InspectionCheckList : MonoBehaviour
 {
     public GameObject CheckList;
 
-    private List<GameObject> Tick = new List<GameObject>();
-    private int currentCheckListNo = 0;
-    bool isReady = true;
+    private List<GameObject> ticks = new List<GameObject>();
+    private int currentIndex = 0;
+    private bool isReady = true;
 
     private void Awake()
     {
-        // Collect all "Tick" children
-        foreach (var cl in CheckList.GetComponentsInChildren<Transform>(true))
+        // Collect all children named "Tick"
+        foreach (var child in CheckList.GetComponentsInChildren<Transform>(true))
         {
-            if (cl.name == "Tick")
-                Tick.Add(cl.gameObject);
+            if (child.name == "Tick")
+                ticks.Add(child.gameObject);
         }
 
         // Disable all ticks
-        foreach (var t in Tick)
+        foreach (var t in ticks)
             t.SetActive(false);
 
-        // Start hidden
+        // Checklist object hidden initially
         gameObject.SetActive(false);
     }
 
+    // ----------------------------
+    //       NEXT
+    // ----------------------------
     [ContextMenu("DoNextTick")]
     public void DoNextTick()
     {
         if (!gameObject.activeInHierarchy) return;
+        if (!isReady || currentIndex >= ticks.Count) return;
 
-        if (!isReady || currentCheckListNo >= Tick.Count)
-        {
-            Debug.LogWarning("No more checklist items.");
-            return;
-        }
-
-        Tick[currentCheckListNo].SetActive(true);
-        currentCheckListNo++;
+        ticks[currentIndex].SetActive(true);
+        currentIndex++;
 
         StartCoroutine(SetReadyAfterDelay());
     }
 
+    // ----------------------------
+    //     PREVIOUS
+    // ----------------------------
     [ContextMenu("DoPreviousTick")]
     public void DoPreviousTick()
     {
         if (!gameObject.activeInHierarchy) return;
+        if (!isReady || currentIndex <= 0) return;
 
-        if (!isReady || currentCheckListNo <= 0)
-        {
-            Debug.LogWarning("Already at beginning.");
-            return;
-        }
-
-        // Move back one
-        currentCheckListNo--;
-        Tick[currentCheckListNo].SetActive(false);
+        currentIndex--;
+        ticks[currentIndex].SetActive(false);
 
         StartCoroutine(SetReadyAfterDelay());
     }
 
+    // ----------------------------
+    //         SKIP
+    // ----------------------------
     [ContextMenu("SkipTick")]
     public void SkipTick()
     {
         if (!gameObject.activeInHierarchy) return;
+        if (!isReady || currentIndex >= ticks.Count - 1) return;
 
-        if (!isReady || currentCheckListNo >= Tick.Count - 1)
-        {
-            Debug.LogWarning("Cannot skip, at end.");
-            return;
-        }
-
-        // Skip current and activate next
-        currentCheckListNo++;
-        Tick[currentCheckListNo].SetActive(true);
-
-        currentCheckListNo++;  // move pointer forward again
+        // Skip ONE element properly
+        currentIndex++; // move to next
+        ticks[currentIndex].SetActive(true); // tick the next item
+        currentIndex++; // move pointer forward
 
         StartCoroutine(SetReadyAfterDelay());
     }
 
+    // ----------------------------
+    //        RESET
+    // ----------------------------
+    [ContextMenu("ResetChecklist")]
+    public void ResetChecklist()
+    {
+        foreach (var t in ticks)
+            t.SetActive(false);
+
+        currentIndex = 0;
+        isReady = true;
+    }
+
+    // ----------------------------
+    //  DELAY HANDLER
+    // ----------------------------
     IEnumerator SetReadyAfterDelay()
     {
         isReady = false;
@@ -89,13 +97,18 @@ public class InspectionCheckList : MonoBehaviour
         isReady = true;
     }
 
-    [ContextMenu("ResetChecklist")]
-    public void ResetChecklist()
+    // ----------------------------
+    //  POSITION IN FRONT OF CAMERA
+    // ----------------------------
+    public void setPosition()
     {
-        foreach (var t in Tick)
-            t.SetActive(false);
+        var cam = Camera.main;
+        if (cam == null) return;
 
-        currentCheckListNo = 0;
-        isReady = true;
+        // Position 1.5m in front of camera
+        transform.position = cam.transform.position + cam.transform.forward * 1.5f;
+
+        // Rotate to face the camera properly
+        transform.rotation = Quaternion.LookRotation(cam.transform.forward, Vector3.up);
     }
 }

@@ -21,6 +21,7 @@ namespace Unity.XR.XREAL.Samples
             Middle,
             Low,
         }
+        [SerializeField] private PermissionManager permissionManager;
         [SerializeField] private Button m_VideoButton;
         [SerializeField] private Button m_PhotoButton;
 
@@ -91,6 +92,17 @@ namespace Unity.XR.XREAL.Samples
 
         void Awake()
         {
+            if (permissionManager == null)
+            {
+                permissionManager = FindObjectOfType<PermissionManager>();
+                if (permissionManager == null)
+                {
+                    GameObject permObj = new GameObject("PermissionManager");
+                    permissionManager = permObj.AddComponent<PermissionManager>();
+                    DontDestroyOnLoad(permObj);
+                }
+            }
+
             m_QualityDropDown.options.Clear();
             m_QualityDropDown.AddOptions(_ResolutionOptions);
             int default_quality_index = 0;
@@ -228,6 +240,22 @@ namespace Unity.XR.XREAL.Samples
 
         public void RecordVideo()
         {
+            // Check permissions first
+            if (!permissionManager.HasCameraPermission() || !permissionManager.HasMicrophonePermission())
+            {
+                Debug.LogWarning("Permissions not granted. Requesting...");
+                permissionManager.CheckAndRequestPermissions(() =>
+                {
+                    // Callback after permissions granted
+                    StartRecordingProcess();
+                });
+                return;
+            }
+
+            StartRecordingProcess();
+        }
+        private void StartRecordingProcess()
+        {
             if (m_VideoCapture == null)
             {
                 CreateVideoCapture(() =>
@@ -235,10 +263,6 @@ namespace Unity.XR.XREAL.Samples
                     StartVideoCapture();
                 });
             }
-  /*          else if (m_VideoCapture.IsRecording)
-            {
-                this.StopVideoCapture();
-            }*/
             else
             {
                 this.StartVideoCapture();
@@ -480,11 +504,26 @@ namespace Unity.XR.XREAL.Samples
         {
             if (isOnPhotoProcess)
             {
-                Debug.LogWarning("[TakePicture] TakeAPhoto: Currently in the process of taking pictures, Can not take photo .");
+                Debug.LogWarning("[TakePicture] TakeAPhoto: Currently in the process of taking pictures, Can not take photo.");
                 return;
             }
 
+            // Check permissions first
+            if (!permissionManager.HasCameraPermission())
+            {
+                Debug.LogWarning("Camera permission not granted. Requesting...");
+                permissionManager.CheckAndRequestPermissions(() =>
+                {
+                    // Callback after permissions granted
+                    StartPhotoProcess();
+                });
+                return;
+            }
 
+            StartPhotoProcess();
+        }
+        private void StartPhotoProcess()
+        {
             isOnPhotoProcess = true;
 
             if (m_PhotoCapture == null)
