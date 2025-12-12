@@ -5,19 +5,8 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 0
-    path: Assets/Scenes/AndroidUtils.unity
-    guid: 6e341bb5a799e2b42a8bb7ba7ac5f33a
-  - enabled: 0
-    path: Assets/Samples/XREAL XR Plugin/3.1.0/Camera Features/RGBCameraAndCapture/RGBCameraAndCapture.unity
-    guid: 2d86868521ba3954d99c23196bc13949
-  - enabled: 0
-    path: Assets/Samples/XREAL XR Plugin/3.1.0/Camera Features/RGBCameraAndCapture/RGBCameraAndCapture
-      1.unity
-    guid: 413a1e05e4f6a974daca39c08267b123
   - enabled: 1
-    path: Assets/Samples/XREAL XR Plugin/3.1.0/Camera Features/RGBCameraAndCapture/RGBCameraAndCapture
-      2.unity
+    path: Assets/Scenes/Xreal One Pro.unity
     guid: d321c38f1b0cab540b1063a7a603bf00
   m_configObjects:
     com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: a00ad04bb9a4e5841b8eaa5361b488fe,
