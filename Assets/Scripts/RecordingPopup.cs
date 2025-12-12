@@ -23,7 +23,7 @@ public class RecordingPopup : MonoBehaviour
     private CanvasGroup canvasGroup;
     private Coroutine savingRoutine;
     private Coroutine startRoutine;
-
+    bool isRecording = false;
     private void Start()
     {
         if (_RecordingPopup != null && _RecordingPopup.TryGetComponent(out CanvasGroup cg))
@@ -43,20 +43,24 @@ public class RecordingPopup : MonoBehaviour
     public void startRecording()
     {
         if (_RecordingPopup == null) return;
+       
+        if (!isRecording)
+        { 
+            // Prevent overlapping coroutines
+            if (startRoutine != null)
+                StopCoroutine(startRoutine);
 
-        // Prevent overlapping coroutines
-        if (startRoutine != null)
-            StopCoroutine(startRoutine);
+            // UI State
+            recImg.gameObject.SetActive(true);
+            saveImg.gameObject.SetActive(false);
+            RecordingText.text = $"Recording starts in... ";
+            SavingText.text = "";
 
-        // UI State
-        recImg.gameObject.SetActive(true);
-        saveImg.gameObject.SetActive(false);
-        RecordingText.text = $"Recording starts in... ";
-        SavingText.text = "";
+            _RecordingPopup.SetActive(true);
 
-        _RecordingPopup.SetActive(true);
-
-        startRoutine = StartCoroutine(StartRecordingPopup());
+            startRoutine = StartCoroutine(StartRecordingPopup());
+            isRecording = true;
+        }
     }
 
     IEnumerator StartRecordingPopup()
@@ -142,5 +146,6 @@ public class RecordingPopup : MonoBehaviour
         saveImg.gameObject.SetActive(false);
         SavingText.text = "";
         _RecordingPopup.SetActive(false);
+        isRecording = false;
     }
 }
