@@ -2,9 +2,9 @@
 using System;
 using System.Text;
 using System.Threading.Tasks;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
-using UnityEngine.UI;
 
 public class ElevenLabsRealtimeSTT : MonoBehaviour
 {
@@ -19,9 +19,8 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
     [SerializeField] private float commandPauseThreshold = 0.8f; // Fast commit for commands
 
     [Header("UI")]
-    [SerializeField] private Text partialTranscriptText; // Real-time
-    [SerializeField] private Text committedTranscriptText; // Final commands
-    [SerializeField] private Text statusText;
+    [SerializeField] private TextMeshProUGUI committedTranscriptText; // Final commands
+    [SerializeField] private TextMeshProUGUI statusText;
 
     [Header("References")]
     public InspectionCheckList InspectionCheckList;
@@ -75,7 +74,7 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
 
         if (string.IsNullOrEmpty(sessionToken))
         {
-            UpdateStatus("❌ Token failed!");
+            UpdateStatus("Token failed!");
             Debug.LogError("[STT] Failed to get token!");
 
             // Retry after 3 seconds
@@ -86,7 +85,7 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
             return;
         }
 
-        Debug.Log("[STT] ✅ Token received! Connecting...");
+        Debug.Log("[STT] Token received! Connecting...");
         UpdateStatus("Connecting...");
 
         // Optimized for COMMAND DETECTION - fast response
@@ -112,8 +111,8 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
 
             websocket.OnOpen += () => {
                 if (isDestroyed) return;
-                Debug.Log("[STT] ✅✅✅ CONNECTED! Ready for commands! ✅✅✅");
-                UpdateStatus("✅ Ready!");
+                Debug.Log("[STT] CONNECTED! Ready for commands!");
+                UpdateStatus("Ready!");
             };
 
             websocket.OnMessage += OnWebSocketMessage;
@@ -121,13 +120,13 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
             websocket.OnError += (e) => {
                 if (isDestroyed) return;
                 Debug.LogError($"[STT] WebSocket Error: {e}");
-                UpdateStatus("❌ Error");
+                UpdateStatus("Error");
             };
 
             websocket.OnClose += (e) => {
                 if (isDestroyed) return;
                 Debug.LogWarning($"[STT] Disconnected! Code: {e}");
-                UpdateStatus("⚠️ Reconnecting...");
+                UpdateStatus("Reconnecting...");
                 isRecording = false;
 
                 // Quick reconnect
@@ -143,7 +142,7 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
         {
             if (isDestroyed) return;
             Debug.LogError($"[STT] Connection failed: {ex.Message}");
-            UpdateStatus("❌ Connection failed");
+            UpdateStatus("Connection failed");
 
             // Retry
             if (!isDestroyed)
@@ -223,13 +222,13 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
 
         if (Microphone.devices.Length == 0)
         {
-            Debug.LogError("[STT] ❌ NO MICROPHONE!");
-            UpdateStatus("❌ No mic!");
+            Debug.LogError("[STT] NO MICROPHONE!");
+            UpdateStatus("No mic!");
             return;
         }
 
         string mic = Microphone.devices[0];
-        Debug.Log($"[STT] 🎤 Starting mic: {mic}");
+        Debug.Log($"[STT] Starting mic: {mic}");
         Debug.Log($"[STT] Mode: CONTINUOUS COMMAND LISTENING");
 
         // Continuous recording with huge buffer
@@ -239,8 +238,8 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
         nextSendTime = Time.time + chunkSendInterval;
         commandCount = 0;
 
-        UpdateStatus("🎤 Listening...");
-        Debug.Log("[STT] 🎤 ALWAYS LISTENING - SAY YOUR COMMANDS! 🎤");
+        UpdateStatus("Listening...");
+        Debug.Log("[STT] ALWAYS LISTENING - SAY YOUR COMMANDS!");
     }
 
     private void Update()
@@ -320,43 +319,33 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
                 case "session_started":
                     var sessionEvt = JsonUtility.FromJson<SessionStartedEvent>(msg);
                     sessionId = sessionEvt.session_id;
-                    Debug.Log($"[STT] 🎉 SESSION ACTIVE: {sessionId}");
-                    UpdateStatus("✅ Ready for commands!");
+                    Debug.Log($"[STT] SESSION ACTIVE: {sessionId}");
+                    UpdateStatus("Ready for commands!");
                     StartMicrophone();
                     break;
 
                 case "partial_transcript":
-                    if (!string.IsNullOrEmpty(evt.text) && partialTranscriptText != null)
-                    {
-                        Debug.Log($"[STT] 🟡 Hearing: \"{evt.text}\"");
-                        partialTranscriptText.text = $"<color=yellow>🔊 {evt.text}</color>";
-                    }
                     break;
 
                 case "committed_transcript":
                 case "committed_transcript_with_timestamps":
                     if (!string.IsNullOrEmpty(evt.text))
                     {
-                        commandCount++;
-                        Debug.Log($"[STT] ✅ COMMAND #{commandCount}: \"{evt.text}\"");
+                        Debug.Log($"Heard: " + evt.text);
 
-                        // Add to committed text with newline
+                        // Add to committed text with newline 
                         allCommittedText.AppendLine(evt.text);
 
                         // Update UI on main thread
                         if (committedTranscriptText != null)
                         {
-                            committedTranscriptText.text = allCommittedText.ToString();
+                         //   committedTranscriptText.text = "Listening... " + allCommittedText.ToString();
+
+                            committedTranscriptText.text = "Listening:- " + evt.text;
                             Debug.Log($"[STT] Updated UI with text: {allCommittedText.ToString()}");
                         }
 
-                        // Clear partial
-                        if (partialTranscriptText != null)
-                        {
-                            partialTranscriptText.text = "<color=green>Ready...</color>";
-                        }
-
-                        UpdateStatus($"🎤 Listening ({commandCount})");
+                        UpdateStatus($"Listening ({commandCount})");
 
                         // HERE: Process your command!
                         ProcessCommand(evt.text);
@@ -370,8 +359,8 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
                 case "input_error":
                     var errorEvt = JsonUtility.FromJson<ScribeError>(msg);
                     string errorMsg = !string.IsNullOrEmpty(errorEvt.error_message) ? errorEvt.error_message : errorEvt.error;
-                    Debug.LogError($"[STT] ❌ Error: {errorMsg}");
-                    UpdateStatus($"❌ {errorMsg}");
+                    Debug.LogError($"[STT] Error: {errorMsg}");
+                    UpdateStatus($" {errorMsg}");
                     break;
             }
         }
@@ -384,11 +373,21 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
         }
     }
 
+    private bool IsValidHumanText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        // Must contain at least ONE letter or number
+        return System.Text.RegularExpressions.Regex.IsMatch(text, @"[a-zA-Z0-9]");
+    }
+
+
     // YOUR COMMAND PROCESSING FUNCTION
     private void ProcessCommand(string command)
     {
         // Convert to lowercase for comparison
-        command = command.ToLower().Trim();
+        command = CleanCommand(command);
         
         if (InspectionCheckList != null)
             InspectionCheckList.ProcessCommand(command);
@@ -417,7 +416,25 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
             }
         }
     }
+    private string CleanCommand(string command)
+    {
+        if (string.IsNullOrEmpty(command)) return "";
 
+        // Convert to lowercase
+        command = command.ToLower();
+
+        // Remove common punctuation
+        command = command.Replace(".", "")
+                         .Replace(",", "")
+                         .Replace("!", "")
+                         .Replace("?", "");
+
+        // Remove extra whitespace
+        command = System.Text.RegularExpressions.Regex.Replace(command, @"\s+", " ");
+
+        // Trim
+        return command.Trim();
+    }
     private byte[] ConvertToPCM16(float[] samples)
     {
         byte[] pcm = new byte[samples.Length * 2];

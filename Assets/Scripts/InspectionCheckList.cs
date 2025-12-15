@@ -11,7 +11,7 @@ public class InspectionCheckList : MonoBehaviour
     [Header("Runtime State")]
     private List<GameObject> ticks = new List<GameObject>();
     private List<GameObject> selections = new List<GameObject>();
-    private int currentIndex = 0;
+    int currentIndex = 0;
     private bool isReady = true;
 
     private const float INPUT_DELAY = 0.25f;
@@ -122,7 +122,7 @@ public class InspectionCheckList : MonoBehaviour
         cmd == "check" || cmd == "mark" || cmd == "done";
 
     private bool IsUncheckCommand(string cmd) =>
-        cmd == "uncheck" || cmd == "unmark";
+        cmd == "uncheck" || cmd == "unmark" || cmd == "unmarked";
 
     private bool IsPassCommand(string cmd) =>
         cmd == "pass" || cmd == "green" || cmd == "good";
@@ -156,7 +156,6 @@ public class InspectionCheckList : MonoBehaviour
     public void DoNextTick()
     {
         if (!CanNavigate() || currentIndex >= selections.Count - 1) return;
-
         selections[currentIndex].SetActive(false);
         currentIndex++;
         selections[currentIndex].SetActive(true);
@@ -234,6 +233,8 @@ public class InspectionCheckList : MonoBehaviour
     [ContextMenu("Reset Checklist")]
     public void ResetChecklist()
     {
+        if (!checkList.activeInHierarchy) return;
+
         foreach (GameObject tick in ticks)
             tick.SetActive(false);
 
