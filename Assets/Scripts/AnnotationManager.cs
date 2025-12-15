@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class AnnotationManager : MonoBehaviour
 {
-    public List<AnnotationShape> annotationShape = new List<AnnotationShape>();
+    private List<AnnotationShape> annotationShape = new List<AnnotationShape>();
     private AnnotationShape activeAnnotation;
 
     public void deleteAnnotation()

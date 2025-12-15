@@ -1,114 +1,269 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class InspectionCheckList : MonoBehaviour
 {
-    public GameObject CheckList;
+    [Header("References")]
+    [SerializeField] private GameObject checkList;
 
+    [Header("Runtime State")]
     private List<GameObject> ticks = new List<GameObject>();
+    private List<GameObject> selections = new List<GameObject>();
     private int currentIndex = 0;
     private bool isReady = true;
 
+    private const float INPUT_DELAY = 0.25f;
+    private const float CHECKLIST_DISTANCE = 1.5f;
+
+    #region Unity Lifecycle
+
     private void Awake()
     {
-        // Collect all children named "Tick"
-        foreach (var child in CheckList.GetComponentsInChildren<Transform>(true))
+        InitializeChecklistElements();
+        ResetChecklist();
+        checkList.SetActive(false);
+    }
+
+    #endregion
+
+    #region Initialization
+
+    private void InitializeChecklistElements()
+    {
+        Transform[] children = checkList.GetComponentsInChildren<Transform>(true);
+
+        foreach (Transform child in children)
         {
             if (child.name == "Tick")
                 ticks.Add(child.gameObject);
+            else if (child.name == "selection")
+                selections.Add(child.gameObject);
         }
-
-        // Disable all ticks
-        foreach (var t in ticks)
-            t.SetActive(false);
-
-        // Checklist object hidden initially
-        gameObject.SetActive(false);
     }
 
-    // ----------------------------
-    //       NEXT
-    // ----------------------------
-    [ContextMenu("DoNextTick")]
+    #endregion
+
+    #region Command Processing
+
+    public void ProcessCommand(string command)
+    {
+        // Visibility commands
+        if (IsShowCommand(command))
+        {
+            ShowChecklist();
+            return;
+        }
+        else if (IsHideCommand(command))
+        {
+            HideChecklist();
+            return;
+        }
+        // Navigation commands
+        else if (IsNextCommand(command))
+        {
+            DoNextTick();
+            return;
+        }
+        else if (IsPreviousCommand(command))
+        {
+            DoPreviousTick();
+            return;
+        }
+        // Marking commands
+        else if (IsCheckCommand(command))
+        {
+            MarkCurrentItem();
+            return;
+        }
+        else if (IsUncheckCommand(command))
+        {
+            UnmarkCurrentItem();
+            return;
+        }
+        // Status commands
+        else if (IsPassCommand(command))
+        {
+            MarkApprove();
+            return;
+        }
+        else if (IsWarningCommand(command))
+        {
+            MarkWarning();
+            return;
+        }
+        else if (IsFailCommand(command))
+        {
+            MarkFailed();
+            return;
+        }
+    }
+
+    private bool IsShowCommand(string cmd) =>
+        cmd == "show checklist" || cmd == "view checklist" || cmd == "open checklist" || cmd == "checklist";
+
+    private bool IsHideCommand(string cmd) =>
+        cmd == "hide checklist" || cmd == "dismiss checklist" || cmd == "close checklist";
+
+    private bool IsNextCommand(string cmd) =>
+        cmd == "next" || cmd == "forward" || cmd == "down";
+
+    private bool IsPreviousCommand(string cmd) =>
+        cmd == "previous" || cmd == "back" || cmd == "up" || cmd == "prev";
+
+    private bool IsCheckCommand(string cmd) =>
+        cmd == "check" || cmd == "mark" || cmd == "done";
+
+    private bool IsUncheckCommand(string cmd) =>
+        cmd == "uncheck" || cmd == "unmark";
+
+    private bool IsPassCommand(string cmd) =>
+        cmd == "pass" || cmd == "green" || cmd == "good";
+
+    private bool IsWarningCommand(string cmd) =>
+        cmd == "warning" || cmd == "yellow" || cmd == "caution";
+
+    private bool IsFailCommand(string cmd) =>
+        cmd == "fail" || cmd == "red" || cmd == "bad";
+
+    #endregion
+
+    #region Visibility Control
+
+    private void ShowChecklist()
+    {
+        checkList.SetActive(true);
+        SetPosition();
+    }
+
+    private void HideChecklist()
+    {
+        checkList.SetActive(false);
+    }
+
+    #endregion
+
+    #region Navigation
+
+    [ContextMenu("Next Item")]
     public void DoNextTick()
     {
-        if (!gameObject.activeInHierarchy) return;
-        if (!isReady || currentIndex >= ticks.Count) return;
+        if (!CanNavigate() || currentIndex >= ticks.Count) return;
 
-        ticks[currentIndex].SetActive(true);
+        selections[currentIndex].SetActive(false);
         currentIndex++;
+        selections[currentIndex].SetActive(true);
 
         StartCoroutine(SetReadyAfterDelay());
     }
 
-    // ----------------------------
-    //     PREVIOUS
-    // ----------------------------
-    [ContextMenu("DoPreviousTick")]
+    [ContextMenu("Previous Item")]
     public void DoPreviousTick()
     {
-        if (!gameObject.activeInHierarchy) return;
-        if (!isReady || currentIndex <= 0) return;
+        if (!CanNavigate() || currentIndex <= 0) return;
 
+        selections[currentIndex].SetActive(false);
         currentIndex--;
-        ticks[currentIndex].SetActive(false);
+        selections[currentIndex].SetActive(true);
 
         StartCoroutine(SetReadyAfterDelay());
     }
 
-    // ----------------------------
-    //         SKIP
-    // ----------------------------
-    [ContextMenu("SkipTick")]
-    public void SkipTick()
+    private bool CanNavigate()
     {
-        if (!gameObject.activeInHierarchy) return;
-        if (!isReady || currentIndex >= ticks.Count - 1) return;
-
-        // Skip ONE element properly
-        currentIndex++; // move to next
-        ticks[currentIndex].SetActive(true); // tick the next item
-        currentIndex++; // move pointer forward
-
-        StartCoroutine(SetReadyAfterDelay());
+        return gameObject.activeInHierarchy && isReady;
     }
 
-    // ----------------------------
-    //        RESET
-    // ----------------------------
-    [ContextMenu("ResetChecklist")]
+    #endregion
+
+    #region Item Marking
+
+    public void MarkCurrentItem()
+    {
+        SetTickState(true, Color.green);
+    }
+
+    public void UnmarkCurrentItem()
+    {
+        SetTickState(false, Color.green);
+    }
+
+    public void MarkApprove()
+    {
+        SetTickState(true, Color.green);
+    }
+
+    public void MarkWarning()
+    {
+        SetTickState(true, Color.yellow);
+    }
+
+    public void MarkFailed()
+    {
+        SetTickState(true, Color.red);
+    }
+
+    private void SetTickState(bool active, Color color)
+    {
+        if (!IsValidCurrentIndex()) return;
+
+        GameObject tick = ticks[currentIndex];
+        tick.SetActive(active);
+
+        Image tickImage = tick.GetComponent<Image>();
+        if (tickImage != null)
+            tickImage.color = color;
+    }
+
+    private bool IsValidCurrentIndex()
+    {
+        return isReady && currentIndex > 0 && currentIndex < ticks.Count;
+    }
+
+    #endregion
+
+    #region Reset
+
+    [ContextMenu("Reset Checklist")]
     public void ResetChecklist()
     {
-        foreach (var t in ticks)
-            t.SetActive(false);
+        foreach (GameObject tick in ticks)
+            tick.SetActive(false);
+
+        foreach (GameObject selection in selections)
+            selection.SetActive(false);
+
+        if (selections.Count > 0)
+            selections[0].SetActive(true);
 
         currentIndex = 0;
         isReady = true;
     }
 
-    // ----------------------------
-    //  DELAY HANDLER
-    // ----------------------------
-    IEnumerator SetReadyAfterDelay()
+    #endregion
+
+    #region Positioning
+
+    private void SetPosition()
+    {
+        Camera cam = Camera.main;
+        if (cam == null) return;
+
+        transform.position = cam.transform.position + cam.transform.forward * CHECKLIST_DISTANCE;
+        transform.rotation = Quaternion.LookRotation(cam.transform.forward, Vector3.up);
+    }
+
+    #endregion
+
+    #region Coroutines
+
+    private IEnumerator SetReadyAfterDelay()
     {
         isReady = false;
-        yield return new WaitForSeconds(0.5f);
+        yield return new WaitForSeconds(INPUT_DELAY);
         isReady = true;
     }
 
-    // ----------------------------
-    //  POSITION IN FRONT OF CAMERA
-    // ----------------------------
-    public void setPosition()
-    {
-        var cam = Camera.main;
-        if (cam == null) return;
-
-        // Position 1.5m in front of camera
-        transform.position = cam.transform.position + cam.transform.forward * 1.5f;
-
-        // Rotate to face the camera properly
-        transform.rotation = Quaternion.LookRotation(cam.transform.forward, Vector3.up);
-    }
+    #endregion
 }

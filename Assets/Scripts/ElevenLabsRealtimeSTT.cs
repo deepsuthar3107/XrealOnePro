@@ -23,6 +23,11 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
     [SerializeField] private Text committedTranscriptText; // Final commands
     [SerializeField] private Text statusText;
 
+    [Header("References")]
+    public InspectionCheckList InspectionCheckList;
+    public RecordingManager recordingManager;
+
+    [Space, Header("Call Custom Events On Commands Matched")]
     public CommandData[] CommandData;
 
     private AudioClip microphoneClip;
@@ -379,11 +384,16 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
     }
 
     // YOUR COMMAND PROCESSING FUNCTION
-    internal string command;
     private void ProcessCommand(string command)
     {
         // Convert to lowercase for comparison
         command = command.ToLower().Trim();
+        
+        if (InspectionCheckList != null)
+            InspectionCheckList.ProcessCommand(command);
+
+        if (recordingManager != null)
+            recordingManager.ProcessCommand(command);
 
         // Check all CommandData entries
         foreach (var data in CommandData)
