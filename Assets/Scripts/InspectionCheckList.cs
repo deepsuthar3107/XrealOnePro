@@ -41,6 +41,12 @@ public class InspectionCheckList : MonoBehaviour
             else if (child.name == "selection")
                 selections.Add(child.gameObject);
         }
+
+        // Validate that we have matching counts
+        if (ticks.Count != selections.Count)
+        {
+            Debug.LogWarning($"Mismatch between ticks ({ticks.Count}) and selections ({selections.Count})");
+        }
     }
 
     #endregion
@@ -149,7 +155,7 @@ public class InspectionCheckList : MonoBehaviour
     [ContextMenu("Next Item")]
     public void DoNextTick()
     {
-        if (!CanNavigate() || currentIndex >= ticks.Count) return;
+        if (!CanNavigate() || currentIndex >= selections.Count - 1) return;
 
         selections[currentIndex].SetActive(false);
         currentIndex++;
@@ -172,7 +178,7 @@ public class InspectionCheckList : MonoBehaviour
 
     private bool CanNavigate()
     {
-        return gameObject.activeInHierarchy && isReady;
+        return gameObject.activeInHierarchy && isReady && selections.Count > 0;
     }
 
     #endregion
@@ -218,7 +224,7 @@ public class InspectionCheckList : MonoBehaviour
 
     private bool IsValidCurrentIndex()
     {
-        return isReady && currentIndex > 0 && currentIndex < ticks.Count;
+        return isReady && currentIndex >= 0 && currentIndex < ticks.Count;
     }
 
     #endregion

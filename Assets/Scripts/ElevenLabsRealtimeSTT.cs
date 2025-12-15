@@ -26,6 +26,7 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
     [Header("References")]
     public InspectionCheckList InspectionCheckList;
     public RecordingManager recordingManager;
+    public AnnotationManager annotationManager;
 
     [Space, Header("Call Custom Events On Commands Matched")]
     public CommandData[] CommandData;
@@ -394,6 +395,9 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
 
         if (recordingManager != null)
             recordingManager.ProcessCommand(command);
+
+        if (annotationManager != null)
+            annotationManager.ProcessCommand(command);
 
         // Check all CommandData entries
         foreach (var data in CommandData)
