@@ -257,8 +257,8 @@ public class InspectionCheckList : MonoBehaviour
         Camera cam = Camera.main;
         if (cam == null) return;
 
-        transform.position = cam.transform.position + cam.transform.forward * CHECKLIST_DISTANCE;
-        transform.rotation = Quaternion.LookRotation(cam.transform.forward, Vector3.up);
+        checkList.transform.position = cam.transform.position + cam.transform.forward * CHECKLIST_DISTANCE;
+        checkList.transform.rotation = Quaternion.LookRotation(cam.transform.forward, Vector3.up);
     }
 
     #endregion
