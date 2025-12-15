@@ -1,5 +1,8 @@
 using System.Collections.Generic;
+using Unity.XR.CoreUtils;
 using UnityEngine;
+using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.Interaction.Toolkit;
 
 public class AnnotationManager : MonoBehaviour
 {
@@ -15,8 +18,31 @@ public class AnnotationManager : MonoBehaviour
     [Header("Spawn Settings")]
     [SerializeField] private float annotationCheckRadius = 0.05f;
 
+    [Header("AR Components")]
+    [SerializeField] private ARAnchorManager anchorManager;
+    [SerializeField] private XROrigin xrOrigin;
+
     private AnnotationShape currentAnnotation;
     private List<AnnotationShape> cachedAnnotations = new List<AnnotationShape>();
+    private List<ARAnchor> spawnedAnchors = new List<ARAnchor>(); // Track anchors
+
+    private void Start()
+    {
+        // Auto-find AR components if not assigned
+        if (anchorManager == null)
+        {
+            anchorManager = FindObjectOfType<ARAnchorManager>();
+            if (anchorManager == null)
+            {
+                Debug.LogWarning("ARAnchorManager not found! Annotations may drift on device.");
+            }
+        }
+
+        if (xrOrigin == null)
+        {
+            xrOrigin = FindObjectOfType<XROrigin>();
+        }
+    }
 
     private void Update()
     {
@@ -37,7 +63,12 @@ public class AnnotationManager : MonoBehaviour
         }
         else if (IsDeleteCommand(command))
         {
-           DeleteSelectedAnnotation();
+            DeleteSelectedAnnotation();
+            return;
+        }
+        else if (IsDeleteAllCommand(command))
+        {
+            DeleteAllAnnotations();
             return;
         }
     }
@@ -105,7 +136,60 @@ public class AnnotationManager : MonoBehaviour
             ? Quaternion.LookRotation(startPoint.forward)
             : Quaternion.identity;
 
-        Instantiate(annotationPrefab, endPoint.position, rotation);
+        // NEW: Create with AR Anchor for stability on device
+        if (anchorManager != null)
+        {
+            SpawnWithAnchor(annotationPrefab, endPoint.position, rotation);
+        }
+        else
+        {
+            // Fallback: spawn without anchor (will work in editor but may drift on device)
+            GameObject annotation = Instantiate(annotationPrefab, endPoint.position, rotation);
+
+            // Parent to XR Origin's TrackablesParent if available
+            if (xrOrigin != null)
+            {
+                Transform trackablesParent = xrOrigin.TrackablesParent;
+                if (trackablesParent != null)
+                {
+                    annotation.transform.SetParent(trackablesParent);
+                }
+            }
+
+            Debug.LogWarning("Spawned without AR Anchor - may drift on device!");
+        }
+    }
+
+    // NEW METHOD: Spawn annotation with AR Anchor
+    private void SpawnWithAnchor(GameObject annotationPrefab, Vector3 position, Quaternion rotation)
+    {
+        // Create a GameObject at the spawn position
+        GameObject anchorObject = new GameObject("Annotation Anchor");
+        anchorObject.transform.position = position;
+        anchorObject.transform.rotation = rotation;
+
+        // Add ARAnchor component (new API)
+        ARAnchor anchor = anchorObject.AddComponent<ARAnchor>();
+
+        if (anchor != null)
+        {
+            // Instantiate annotation as child of anchor
+            GameObject annotation = Instantiate(annotationPrefab, anchorObject.transform);
+            annotation.transform.localPosition = Vector3.zero;
+            annotation.transform.localRotation = Quaternion.identity;
+
+            // Track the anchor for cleanup
+            spawnedAnchors.Add(anchor);
+
+            Debug.Log($"Annotation spawned with AR Anchor at: {position}");
+        }
+        else
+        {
+            Debug.LogError("Failed to create AR Anchor! Annotation may drift.");
+            // Fallback to non-anchored spawn
+            Destroy(anchorObject);
+            Instantiate(annotationPrefab, position, rotation);
+        }
     }
 
     private bool IsAnnotationAtEndPoint()
@@ -132,7 +216,18 @@ public class AnnotationManager : MonoBehaviour
         {
             if (shape.isSelected)
             {
-                Destroy(shape.gameObject);
+                // NEW: Also destroy the anchor if it exists
+                ARAnchor anchor = shape.GetComponentInParent<ARAnchor>();
+                if (anchor != null)
+                {
+                    spawnedAnchors.Remove(anchor);
+                    Destroy(anchor.gameObject); // Destroys anchor and its children
+                }
+                else
+                {
+                    Destroy(shape.gameObject);
+                }
+
                 currentAnnotation = null;
                 return;
             }
@@ -148,11 +243,21 @@ public class AnnotationManager : MonoBehaviour
 
         foreach (var shape in cachedAnnotations)
         {
-            Destroy(shape.gameObject);
+            // NEW: Check if annotation has an anchor parent
+            ARAnchor anchor = shape.GetComponentInParent<ARAnchor>();
+            if (anchor != null)
+            {
+                Destroy(anchor.gameObject); // Destroys anchor and children
+            }
+            else
+            {
+                Destroy(shape.gameObject);
+            }
         }
 
         currentAnnotation = null;
         cachedAnnotations.Clear();
+        spawnedAnchors.Clear();
     }
 
     private void RefreshAnnotationCache()
