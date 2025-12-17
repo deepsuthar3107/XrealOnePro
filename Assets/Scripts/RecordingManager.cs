@@ -284,6 +284,10 @@ public class RecordingManager : MonoBehaviour
         recordingPopup.SetActive(false);
         SetText(recordingText, string.Empty);
         recordingUI.SetActive(true);
+
+        // Reset the elapsed time for new recording
+        elapsedTime = 0f;
+
         captureExample.RecordVideo();
     }
 

@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Networking;
+using TMPro;
 
 namespace Unity.XR.XREAL.Samples
 {
@@ -21,6 +23,12 @@ namespace Unity.XR.XREAL.Samples
             Middle,
             Low,
         }
+
+        [Header("Backend Settings")]
+        public TextMeshProUGUI DebugTxt;
+        [SerializeField] private string backendUploadUrl = "https://api.example.com/upload/video";
+        [SerializeField] private bool autoUploadToBackend = true;
+
         [SerializeField] private Button m_VideoButton;
         [SerializeField] private Button m_PhotoButton;
 
@@ -235,10 +243,6 @@ namespace Unity.XR.XREAL.Samples
                     StartVideoCapture();
                 });
             }
-            /*          else if (m_VideoCapture.IsRecording)
-                      {
-                          this.StopVideoCapture();
-                      }*/
             else
             {
                 this.StartVideoCapture();
@@ -278,8 +282,6 @@ namespace Unity.XR.XREAL.Samples
             cameraParameters.cameraResolutionHeight = cameraResolution.height;
             cameraParameters.pixelFormat = CapturePixelFormat.PNG;
             cameraParameters.blendMode = blendMode;
-            // Set audio state, audio record needs the permission of "android.permission.RECORD_AUDIO",
-            // Add it to your "AndroidManifest.xml" file in "Assets/Plugin".
             cameraParameters.audioState = audioState;
             cameraParameters.captureSide = captureside;
             cameraParameters.backgroundColor = useGreenBackGround ? Color.green : Color.black;
@@ -407,6 +409,12 @@ namespace Unity.XR.XREAL.Samples
         {
             yield return new WaitForSeconds(0.1f);
             InsertVideoToGallery(originFilePath, displayName, folderName);
+
+            // Upload to backend if enabled
+            if (autoUploadToBackend)
+            {
+                StartCoroutine(UploadVideoToBackend(originFilePath, displayName));
+            }
         }
 
         public void InsertVideoToGallery(string originFilePath, string displayName, string folderName)
@@ -420,7 +428,107 @@ namespace Unity.XR.XREAL.Samples
             galleryDataTool.InsertVideo(originFilePath, displayName, folderName);
         }
 
+        /// <summary> Uploads video to backend server. </summary>
+        /// <param name="filePath">Path to the video file</param>
+        /// <param name="fileName">Name of the file</param>
+        IEnumerator UploadVideoToBackend(string filePath, string fileName)
+        {
+            Debug.Log($"[Backend Upload] Starting upload for: {fileName}");
 
+            if (!File.Exists(filePath))
+            {
+                Debug.LogError($"[Backend Upload] File not found: {filePath}");
+                DebugTxt.text = $"[Backend Upload] File not found: {filePath}";
+                yield break;
+            }
+
+            // Read the video file
+            byte[] videoData = null;
+            try
+            {
+                videoData = File.ReadAllBytes(filePath);
+                Debug.Log($"[Backend Upload] File size: {videoData.Length / 1024}KB");
+                DebugTxt.text = $"[Backend Upload] File size: {videoData.Length / 1024}KB";
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Backend Upload] Failed to read file: {e.Message}");
+                DebugTxt.text = $"[Backend Upload] Failed to read file: {e.Message}";
+                yield break;
+            }
+
+            // Create multipart form data
+            WWWForm form = new WWWForm();
+            form.AddBinaryData("video", videoData, fileName, "video/mp4");
+            form.AddField("timestamp", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString());
+            form.AddField("deviceId", SystemInfo.deviceUniqueIdentifier);
+            form.AddField("resolution", resolutionLevel.ToString());
+            form.AddField("blendMode", blendMode.ToString());
+
+            // Send the request
+            using (UnityWebRequest www = UnityWebRequest.Post(backendUploadUrl, form))
+            {
+                // Set timeout (30 seconds)
+                www.timeout = 30;
+
+                Debug.Log($"[Backend Upload] Uploading to: {backendUploadUrl}");
+                DebugTxt.text = $"[Backend Upload] Uploading to: {backendUploadUrl}";
+
+                // Start the upload
+                yield return www.SendWebRequest();
+
+                // Check for errors
+                if (www.result == UnityWebRequest.Result.Success)
+                {
+                    Debug.Log($"[Backend Upload] Upload successful! Response: {www.downloadHandler.text}");
+                    DebugTxt.text = $"[Backend Upload] Upload successful! Response: {www.downloadHandler.text}";
+                    OnVideoUploadSuccess(fileName, www.downloadHandler.text);
+                }
+                else
+                {
+                    Debug.LogError($"[Backend Upload] Upload failed! Error: {www.error}");
+                    Debug.LogError($"[Backend Upload] Response Code: {www.responseCode}");
+                    DebugTxt.text = $"[Backend Upload] Upload failed! Error: {www.error}";
+                    DebugTxt.text += $"[Backend Upload] Response Code: {www.responseCode}";
+
+                    OnVideoUploadFailed(fileName, www.error);
+                }
+            }
+        }
+
+        /// <summary> Called when video upload succeeds. </summary>
+        void OnVideoUploadSuccess(string fileName, string response)
+        {
+            Debug.Log($"[Backend Upload] Successfully uploaded {fileName}");
+            DebugTxt.text = $"[Backend Upload] Successfully uploaded {fileName}";
+            // You can add additional logic here, such as:
+            // - Updating UI
+            // - Deleting local file if no longer needed
+            // - Sending analytics
+        }
+
+        /// <summary> Called when video upload fails. </summary>
+        void OnVideoUploadFailed(string fileName, string error)
+        {
+            Debug.LogWarning($"[Backend Upload] Failed to upload {fileName}: {error}");
+            DebugTxt.text = $"[Backend Upload] Failed to upload {fileName}: {error}";
+            // You can add retry logic or queue for later upload
+        }
+
+        /// <summary> Manually trigger upload of a specific video file. </summary>
+        /// <param name="filePath">Full path to the video file</param>
+        public void ManualUploadVideo(string filePath)
+        {
+            if (File.Exists(filePath))
+            {
+                string fileName = Path.GetFileName(filePath);
+                StartCoroutine(UploadVideoToBackend(filePath, fileName));
+            }
+            else
+            {
+                Debug.LogError($"[Backend Upload] File not found for manual upload: {filePath}");
+            }
+        }
 
         /// <summary> Use this for initialization. </summary>
         void CreatePhotoCapture(Action<XREALPhotoCapture> onCreated)
@@ -431,7 +539,6 @@ namespace Unity.XR.XREAL.Samples
                 return;
             }
 
-            // Create a PhotoCapture object
             XREALPhotoCapture.CreateAsync(false, delegate (XREALPhotoCapture captureObject)
             {
                 m_CameraResolution = XREALPhotoCapture.SupportedResolutions.OrderByDescending((res) => res.width * res.height).First();
@@ -457,7 +564,6 @@ namespace Unity.XR.XREAL.Samples
                 cameraParameters.captureSide = captureside;
                 cameraParameters.backgroundColor = useGreenBackGround ? Color.green : Color.black;
 
-                // Activate the camera
                 m_PhotoCapture.StartPhotoModeAsync(cameraParameters, delegate (XREALPhotoCapture.PhotoCaptureResult result)
                 {
                     Debug.Log("Start PhotoMode Async");
@@ -484,7 +590,6 @@ namespace Unity.XR.XREAL.Samples
                 return;
             }
 
-
             isOnPhotoProcess = true;
 
             if (m_PhotoCapture == null)
@@ -501,18 +606,16 @@ namespace Unity.XR.XREAL.Samples
         }
 
         /// <summary> Executes the 'captured photo memory' action. </summary>
-        /// <param name="result">            The result.</param>
-        /// <param name="photoCaptureFrame"> The photo capture frame.</param>
+        /// <param name="result">The result.</param>
+        /// <param name="photoCaptureFrame">The photo capture frame.</param>
         void OnCapturedPhotoToMemory(XREALPhotoCapture.PhotoCaptureResult result, PhotoCaptureFrame photoCaptureFrame)
         {
             Debug.Log("[TakePicture] OnCapturedPhotoToMemory");
             var targetTexture = new Texture2D(m_CameraResolution.width, m_CameraResolution.height);
-            // Copy the raw image data into our target texture
             photoCaptureFrame.UploadImageDataToTexture(targetTexture);
 
             SaveTextureAsPNG(photoCaptureFrame);
             SaveTextureToGallery(photoCaptureFrame);
-            // Release camera resource after capture the photo.
             this.ClosePhotoCapture();
         }
 
@@ -537,7 +640,6 @@ namespace Unity.XR.XREAL.Samples
                     Directory.CreateDirectory(path);
                 }
                 File.WriteAllBytes(string.Format("{0}/{1}", path, filename), _bytes);
-
             }
             catch (Exception e)
             {
@@ -554,15 +656,13 @@ namespace Unity.XR.XREAL.Samples
                 Debug.LogError("The XREALPhotoCapture has not been created.");
                 return;
             }
-            // Deactivate our camera
             m_PhotoCapture.StopPhotoModeAsync(OnStoppedPhotoMode);
         }
 
         /// <summary> Executes the 'stopped photo mode' action. </summary>
-        /// <param name="result"> The result.</param>
+        /// <param name="result">The result.</param>
         void OnStoppedPhotoMode(XREALPhotoCapture.PhotoCaptureResult result)
         {
-            // Shutdown our photo capture resource
             m_PhotoCapture?.Dispose();
             m_PhotoCapture = null;
             isOnPhotoProcess = false;
