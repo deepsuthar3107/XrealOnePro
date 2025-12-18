@@ -15,9 +15,9 @@ public class InspectionCheckList : MonoBehaviour
     private const float INPUT_DELAY = 0.1f;
     private const float CHECKLIST_DISTANCE = 1f;
     private const float VOICE_GUIDE_DISTANCE = 0.8f;
-    private const float VOICE_GUIDE_OFFSET = -0.1f;
-    private const float CHECKLIST_OFFSET = 0.1f;
-    private const float OVERLAP_THRESHOLD = 0.2f;
+    private const float VOICE_GUIDE_OFFSET = -0.2f;
+    private const float CHECKLIST_OFFSET = 0.15f;
+    private const float OVERLAP_THRESHOLD = 0.4f;
     #endregion
 
     #region Private Fields

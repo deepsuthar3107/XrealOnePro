@@ -259,10 +259,19 @@ public class AIVARealtimeSTT : MonoBehaviour
     {
         if (isDestroyed) return;
 
+        string msg = Encoding.UTF8.GetString(bytes);
+        Debug.Log($"[STT] Raw message: {msg}"); // Temporary debug to see what we're getting
+
         try
         {
-            var evt = JsonUtility.FromJson<AIVAEvent>(Encoding.UTF8.GetString(bytes));
-            if (evt == null || string.IsNullOrEmpty(evt.@event)) return;
+            var evt = JsonUtility.FromJson<AIVAEvent>(msg);
+            if (evt == null || string.IsNullOrEmpty(evt.@event))
+            {
+                Debug.Log("[STT] Could not parse event");
+                return;
+            }
+
+            Debug.Log($"[STT] Event type: {evt.@event}");
 
             switch (evt.@event)
             {
@@ -272,15 +281,20 @@ public class AIVARealtimeSTT : MonoBehaviour
                     break;
 
                 case "transcript":
-                    if (evt.data != null)
+                    if (evt.data != null && !string.IsNullOrEmpty(evt.data.transcript))
                     {
-                        // Update live transcript immediately
-                        currentLiveTranscript = evt.data.transcript;
-                        UpdateLiveTranscript(currentLiveTranscript);
+                        Debug.Log($"[STT] Transcript - isFinal: {evt.data.isFinal}, text: {evt.data.transcript}");
 
-                        // Process final transcript
-                        if (evt.data.isFinal)
+                        // Update live transcript immediately for ALL transcripts
+                        if (!evt.data.isFinal)
                         {
+                            // This is a partial/live transcript
+                            currentLiveTranscript = evt.data.transcript;
+                            UpdateLiveTranscript(currentLiveTranscript);
+                        }
+                        else
+                        {
+                            // This is a final transcript
                             commandCount++;
                             UpdateFinalTranscript(evt.data.transcript);
                             ProcessCommand(evt.data.transcript);
@@ -290,14 +304,32 @@ public class AIVARealtimeSTT : MonoBehaviour
                             UpdateLiveTranscript("");
                         }
                     }
+                    else
+                    {
+                        Debug.Log("[STT] Transcript event but no data or empty transcript");
+                    }
+                    break;
+
+                case "user_speaking":
+                    if (evt.data != null)
+                    {
+                        Debug.Log($"[STT] User speaking: {evt.data.speaking}");
+                    }
                     break;
 
                 case "stt_queued":
                     UpdateStatus("Queued");
                     break;
+
+                default:
+                    Debug.Log($"[STT] Unknown event: {evt.@event}");
+                    break;
             }
         }
-        catch { /* Ignore malformed messages */ }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[STT] Parse error: {ex.Message}");
+        }
     }
 
     private void ProcessCommand(string command)
@@ -339,7 +371,7 @@ public class AIVARealtimeSTT : MonoBehaviour
 
     private void UpdateLiveTranscript(string text)
     {
-       
+        
     }
 
     private void UpdateFinalTranscript(string text)

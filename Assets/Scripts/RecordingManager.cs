@@ -195,6 +195,7 @@ public class RecordingManager : MonoBehaviour
         PrepareSavingUI();
         ShowPopup();
 
+        captureExample.StopVideoCapture();
         recordingUI.SetActive(false);
         savingRoutine = StartCoroutine(StopRecordingSequence());
     }
@@ -331,7 +332,6 @@ public class RecordingManager : MonoBehaviour
 
     private void FinalizeSaving()
     {
-        captureExample.StopVideoCapture();
         CleanupSavingUI();
     }
 
