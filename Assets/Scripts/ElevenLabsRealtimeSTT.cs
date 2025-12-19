@@ -17,6 +17,25 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
 
     [Header("VAD Settings - For Command Detection")]
     [SerializeField] private float commandPauseThreshold = 0.8f; // Fast commit for commands
+    
+    [Header("Voice Indicator (REAL TIME)")]
+    public GameObject VoiceIndicater;
+    [SerializeField] private float voiceThreshold = 0.015f;
+    [SerializeField] private float silenceDelay = 0.25f;
+    [SerializeField] private float pulseMultiplier = 4f;
+
+    [Header("Voice Indicator (REAL TIME)")]
+    public GameObject InternetIndicator;
+
+    private float lastVoiceTime;
+    private bool isUserSpeaking;
+
+    // Add these fields at the top
+    private bool hasInternet = true;
+    private float lastInternetCheck = 0f;
+    private const float INTERNET_CHECK_INTERVAL = 1f; // Check every second
+    private bool isSendingAudio = false;
+
 
     [Header("UI")]
     [SerializeField] private TextMeshProUGUI committedTranscriptText; // Final commands
@@ -111,8 +130,15 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
 
             websocket.OnOpen += () => {
                 if (isDestroyed) return;
-                Debug.Log("[STT] CONNECTED! Ready for commands!");
+                Debug.Log("[STT] ✅ CONNECTED! Ready for commands!");
                 UpdateStatus("Ready!");
+
+                // ✅ AUTO-RESUME: WebSocket connected hai aur microphone nahi chal raha
+                if (!isRecording && hasInternet)
+                {
+                    Debug.Log("[STT] 🎤 Auto-resuming microphone...");
+                    Invoke(nameof(StartMicrophone), 0.2f);
+                }
             };
 
             websocket.OnMessage += OnWebSocketMessage;
@@ -123,18 +149,20 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
                 UpdateStatus("Error");
             };
 
-            websocket.OnClose += (e) => {
+            websocket.OnClose += (e) =>
+            {
                 if (isDestroyed) return;
+
                 Debug.LogWarning($"[STT] Disconnected! Code: {e}");
                 UpdateStatus("Reconnecting...");
+
+                PauseMicrophone(); // 🔥 VERY IMPORTANT
                 isRecording = false;
 
-                // Quick reconnect
-                if (!isDestroyed)
-                {
-                    Invoke(nameof(RetryConnection), 1f);
-                }
+                CancelInvoke(nameof(RetryConnection));
+                Invoke(nameof(RetryConnection), 1f);
             };
+
 
             await websocket.Connect();
         }
@@ -155,6 +183,14 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
     private void RetryConnection()
     {
         if (isDestroyed) return;
+
+        // Don't retry if no internet
+        if (!hasInternet)
+        {
+            Debug.Log("[STT] No internet - will retry when connection restored");
+            UpdateStatus("No Internet");
+            return;
+        }
 
         // Clean up old connection
         if (websocket != null && websocket.State == WebSocketState.Open)
@@ -214,6 +250,22 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
     {
         if (isDestroyed) return;
 
+        // ✅ Check internet before starting
+        if (!hasInternet)
+        {
+            Debug.Log("[STT] ❌ Cannot start microphone - no internet");
+            UpdateStatus("No Internet");
+            return;
+        }
+
+        // ✅ Check WebSocket state
+        if (websocket?.State != WebSocketState.Open)
+        {
+            Debug.Log("[STT] ⏳ Waiting for WebSocket connection...");
+            UpdateStatus("Connecting...");
+            return;
+        }
+
         if (isRecording)
         {
             Debug.Log("[STT] Already recording");
@@ -228,7 +280,7 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
         }
 
         string mic = Microphone.devices[0];
-        Debug.Log($"[STT] Starting mic: {mic}");
+        Debug.Log($"[STT] 🎤 Starting mic: {mic}");
         Debug.Log($"[STT] Mode: CONTINUOUS COMMAND LISTENING");
 
         // Continuous recording with huge buffer
@@ -239,69 +291,175 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
         commandCount = 0;
 
         UpdateStatus("Listening...");
-        Debug.Log("[STT] ALWAYS LISTENING - SAY YOUR COMMANDS!");
+        Debug.Log("[STT] ✅ MICROPHONE ACTIVE - SAY YOUR COMMANDS!");
+    }
+    private void UpdateVoiceIndicator(float[] samples)
+    {
+        float sum = 0f;
+        for (int i = 0; i < samples.Length; i++)
+            sum += Mathf.Abs(samples[i]);
+
+        float loudness = sum / samples.Length;
+
+        if (loudness > voiceThreshold)
+        {
+            lastVoiceTime = Time.time;
+
+            if (!isUserSpeaking)
+            {
+                isUserSpeaking = true;
+                if (VoiceIndicater != null)
+                    VoiceIndicater.SetActive(true);
+            }
+
+            float scale = Mathf.Lerp(0.7f, 1.1f, loudness * pulseMultiplier);
+            VoiceIndicater.transform.localScale =
+                Vector3.Lerp(VoiceIndicater.transform.localScale,
+                Vector3.one * scale,
+                Time.deltaTime * 12f);
+        }
     }
 
     private void Update()
     {
         if (isDestroyed) return;
 
-        // Dispatch messages
-        websocket?.DispatchMessageQueue();
+        // Check internet periodically (not every frame)
+        if (Time.time - lastInternetCheck > INTERNET_CHECK_INTERVAL)
+        {
+            lastInternetCheck = Time.time;
+            bool previousState = hasInternet;  // ✅ Declare karo yahan
+            hasInternet = Application.internetReachability != NetworkReachability.NotReachable;
 
-        // Stream audio continuously
-        if (isRecording && microphoneClip != null && websocket?.State == WebSocketState.Open && Time.time >= nextSendTime)
+            if (InternetIndicator != null)
+                InternetIndicator.SetActive(!hasInternet);
+
+            // ✅ INTERNET WAPIS AAYA - Reconnect + Auto Resume
+            if (!previousState && hasInternet)
+            {
+                Debug.Log("[STT] 🌐 Internet restored - reconnecting...");
+
+                // Stop mic if running without connection
+                if (isRecording)
+                {
+                    PauseMicrophone();
+                }
+
+                // Reconnect WebSocket
+                if (websocket?.State != WebSocketState.Open)
+                {
+                    CancelInvoke(nameof(RetryConnection));
+                    Invoke(nameof(RetryConnection), 0.5f);
+                }
+            }
+            // ❌ INTERNET CHALA GAYA - Pause everything
+            else if (previousState && !hasInternet && isRecording)
+            {
+                Debug.Log("[STT] ❌ Internet lost - pausing...");
+                UpdateStatus("No Internet - Paused");
+                PauseMicrophone();
+            }
+        }
+
+        // Dispatch messages ONLY if we have internet
+        if (hasInternet)
+        {
+            websocket?.DispatchMessageQueue();
+        }
+
+        // Stream audio continuously - BUT ONLY IF WE HAVE INTERNET
+        if (hasInternet &&
+            isRecording &&
+            microphoneClip != null &&
+            websocket?.State == WebSocketState.Open &&
+            Time.time >= nextSendTime)
         {
             SendAudioChunk();
             nextSendTime = Time.time + chunkSendInterval;
         }
+
+        // Voice indicator silence check
+        if (isUserSpeaking && Time.time - lastVoiceTime > silenceDelay)
+        {
+            isUserSpeaking = false;
+            if (VoiceIndicater != null)
+                VoiceIndicater.SetActive(false);
+        }
+    }
+    public void PauseMicrophone()
+    {
+        if (isRecording && Microphone.IsRecording(null))
+        {
+            Microphone.End(null);
+            isRecording = false;
+            Debug.Log("[STT] Microphone paused (no internet)");
+        }
     }
 
+    public void ResumeMicrophone()
+    {
+        if (!isRecording && hasInternet && websocket?.State == WebSocketState.Open)
+        {
+            StartMicrophone();
+        }
+    }
     private async void SendAudioChunk()
     {
-        if (isDestroyed || websocket?.State != WebSocketState.Open) return;
+        if (isDestroyed || !hasInternet) return;
+        if (websocket == null) return;
+        if (websocket.State != WebSocketState.Open) return;
+        if (isSendingAudio) return;
 
-        int pos = Microphone.GetPosition(null);
-        if (pos < 0) return;
-
-        // Handle wrap-around
-        if (pos < lastSamplePosition)
-        {
-            pos += microphoneClip.samples;
-        }
-
-        int toRead = pos - lastSamplePosition;
-        if (toRead <= 0) return;
-
-        // Get samples
-        float[] samples = new float[toRead];
-        int startPos = lastSamplePosition % microphoneClip.samples;
-        microphoneClip.GetData(samples, startPos);
-
-        // Convert to PCM16
-        byte[] pcm = ConvertToPCM16(samples);
-        lastSamplePosition = pos;
-
-        // Send chunk
-        var message = new InputAudioChunkMessage
-        {
-            message_type = "input_audio_chunk",
-            audio_base_64 = Convert.ToBase64String(pcm),
-            sample_rate = sampleRate
-        };
+        isSendingAudio = true;
 
         try
         {
+            int pos = Microphone.GetPosition(null);
+            if (pos < 0) return;
+
+            if (pos < lastSamplePosition)
+                pos += microphoneClip.samples;
+
+            int toRead = pos - lastSamplePosition;
+
+            // 🚨 HARD SAFETY LIMIT (VERY IMPORTANT)
+            int maxSamples = sampleRate / 2; // max 500ms
+            if (toRead > maxSamples)
+            {
+                lastSamplePosition = pos;
+                return;
+            }
+
+            if (toRead <= 0) return;
+
+            float[] samples = new float[toRead];
+            int startPos = lastSamplePosition % microphoneClip.samples;
+            microphoneClip.GetData(samples, startPos);
+
+            UpdateVoiceIndicator(samples);
+
+            byte[] pcm = ConvertToPCM16(samples);
+            lastSamplePosition = pos;
+
+            var message = new InputAudioChunkMessage
+            {
+                message_type = "input_audio_chunk",
+                audio_base_64 = Convert.ToBase64String(pcm),
+                sample_rate = sampleRate
+            };
+
             await websocket.SendText(JsonUtility.ToJson(message));
         }
         catch (Exception ex)
         {
-            if (!isDestroyed)
-            {
-                Debug.LogError($"[STT] Send error: {ex.Message}");
-            }
+            Debug.LogWarning($"[STT] Send skipped: {ex.Message}");
+        }
+        finally
+        {
+            isSendingAudio = false;
         }
     }
+
 
     private void OnWebSocketMessage(byte[] bytes)
     {
@@ -349,6 +507,8 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
 
                         // HERE: Process your command!
                         ProcessCommand(evt.text);
+                        if (VoiceIndicater != null && VoiceIndicater.activeSelf)
+                            VoiceIndicater.SetActive(false);
                     }
                     break;
 
@@ -456,7 +616,6 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
             statusText.text = status;
         }
     }
-
     private void OnDestroy()
     {
         Debug.Log("[STT] ========== SHUTTING DOWN ==========");

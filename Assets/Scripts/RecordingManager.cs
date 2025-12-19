@@ -3,6 +3,7 @@ using System.Collections;
 using TMPro;
 using Unity.XR.XREAL.Samples;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 public class RecordingManager : MonoBehaviour
@@ -34,6 +35,9 @@ public class RecordingManager : MonoBehaviour
     [SerializeField] private float countdownDuration = 3f;
     [SerializeField] private float savingDuration = 2f;
     [SerializeField] private float savingFillSpeed = 1.5f;
+
+    [Space]
+    public UnityEvent OnRecordingCommandMatch;
 
     // State
     private float elapsedTime;
@@ -176,6 +180,7 @@ public class RecordingManager : MonoBehaviour
     {
         if (recordingPopup == null || isRecording) return;
 
+        OnRecordingCommandMatch.Invoke();
         StopCoroutineIfRunning(ref startRoutine);
 
         PrepareRecordingUI();

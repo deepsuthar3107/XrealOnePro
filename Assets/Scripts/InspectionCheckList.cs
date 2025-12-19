@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,13 +9,18 @@ public class InspectionCheckList : MonoBehaviour
     #region Serialized Fields
     [Header("References")]
     [SerializeField] private GameObject checkList;
+    [SerializeField] private GameObject repairOrder;
     [SerializeField] private GameObject voiceCommandGuide;
+
+    [Header("Two Options")]
+    public GameObject OptionUI;
+    public TextMeshProUGUI Count;
     #endregion
 
     #region Constants
     private const float INPUT_DELAY = 0.1f;
     private const float CHECKLIST_DISTANCE = 1f;
-    private const float VOICE_GUIDE_DISTANCE = 0.8f;
+    private const float VOICE_GUIDE_DISTANCE = 1f;
     private const float VOICE_GUIDE_OFFSET = -0.2f;
     private const float CHECKLIST_OFFSET = 0.15f;
     private const float OVERLAP_THRESHOLD = 0.4f;
@@ -28,6 +34,8 @@ public class InspectionCheckList : MonoBehaviour
     private Camera mainCamera;
     #endregion
 
+    private Coroutine waitCoroutine;
+
     #region Unity Lifecycle
     private void Awake()
     {
@@ -35,12 +43,40 @@ public class InspectionCheckList : MonoBehaviour
         InitializeChecklistElements();
         ResetChecklist();
         checkList.SetActive(false);
-        InitializeVoiceCommandUI();
-        Invoke(nameof(InitializeVoiceCommandUI), 1);
+        repairOrder.SetActive(false);
+    }
+    private void Start()
+    {
+        waitCoroutine = StartCoroutine(WaitForOptions());
     }
     #endregion
 
     #region Initialization
+    IEnumerator WaitForOptions()
+    {
+        float countingTime = 6f; // countdown in seconds
+        OptionUI.SetActive(true);
+
+        while (countingTime > 0f)
+        {
+            countingTime -= Time.deltaTime;              // decrease by elapsed time
+            Count.text = Mathf.CeilToInt(countingTime).ToString(); // show integer countdown
+            yield return null;
+        }
+
+        OptionUI.SetActive(false);  // hide UI after countdown
+        yield return new WaitForSeconds(1f);
+        InitializeVoiceCommandUI();
+    }
+    public void StopCoroutineSafe()
+    {
+        if (waitCoroutine != null)
+        {
+            StopCoroutine(waitCoroutine);
+            waitCoroutine = null;
+        }
+    }
+
     private void InitializeVoiceCommandUI()
     {
         voiceCommandGuide.SetActive(true);
@@ -85,12 +121,21 @@ public class InspectionCheckList : MonoBehaviour
 
         command = command.ToLower().Trim();
 
-        // Visibility
+        // Cheklist Visibility
         if (IsShowCommand(command)) { ShowChecklist(); return; }
         if (IsHideCommand(command)) { HideChecklist(); return; }
+     
+        // RO Visibility
+        if (IsShowROCommand(command)) { ShowRO(); return; }
+        if (IsHideROCommand(command)) { HideRO(); return; }
 
         // Voice UI
-        if (IsShowVoiceCommandUI(command)) { ShowVoiceCommandUI(); return; }
+        if (IsShowVoiceCommandUI(command)) 
+        {
+            StopCoroutineSafe();
+            OptionUI.SetActive(false);  
+            ShowVoiceCommandUI(); return; 
+        }
         if (IsHideVoiceCommandUI(command)) { HideVoiceCommandUI(); return; }
 
         // Navigation
@@ -163,6 +208,11 @@ public class InspectionCheckList : MonoBehaviour
 
     private bool IsHideVoiceCommandUI(string cmd) =>
         cmd == "hide voice command" || cmd == "close voice command" || cmd == "hide voicecommand" || cmd == "close voicecommand" || cmd == "close";
+    private bool IsShowROCommand(string cmd) =>
+       cmd == "show repair order" || cmd == "open repair order" || cmd == "open ro" || cmd == "show ro";
+
+    private bool IsHideROCommand(string cmd) =>
+        cmd == "hide repair order" || cmd == "close repair order" || cmd == "close ro" | cmd == "hide ro";
 
     private bool IsNextCommand(string cmd) =>
         cmd == "next" || cmd == "forward" || cmd == "down";
@@ -191,11 +241,22 @@ public class InspectionCheckList : MonoBehaviour
     {
         checkList.SetActive(true);
         SetChecklistPosition();
+        OptionUI.SetActive(false);
     }
 
     private void HideChecklist() => checkList.SetActive(false);
+
+    private void ShowRO()
+    {
+        repairOrder.SetActive(true);
+        SetRepairOrdertPosition();
+        OptionUI.SetActive(false);
+    }
+
+    private void HideRO() => repairOrder.SetActive(false);
     private void ShowVoiceCommandUI()
     {
+        OptionUI.SetActive(false);
         voiceCommandGuide.SetActive(true);
         SetPositionVoiceCommandUI();
     }
@@ -233,10 +294,28 @@ public class InspectionCheckList : MonoBehaviour
             camTransform.right * CHECKLIST_OFFSET;
         checkList.transform.rotation = Quaternion.LookRotation(camTransform.forward, Vector3.up);
 
-        if (voiceCommandGuide.activeInHierarchy && IsOverlapping())
+        if (voiceCommandGuide.activeInHierarchy && IsOverlapping(checkList.transform, voiceCommandGuide.transform))
             SetPositionVoiceCommandUI();
-    }
 
+        if (repairOrder.activeInHierarchy && IsOverlapping(checkList.transform, repairOrder.transform))
+            HideRO();
+    }
+    private void SetRepairOrdertPosition()
+    {
+        if (mainCamera == null) return;
+
+        Transform camTransform = mainCamera.transform;
+        repairOrder.transform.position = camTransform.position +
+            camTransform.forward * CHECKLIST_DISTANCE +
+            camTransform.right * CHECKLIST_OFFSET;
+        repairOrder.transform.rotation = Quaternion.LookRotation(camTransform.forward, Vector3.up);
+
+        if (voiceCommandGuide.activeInHierarchy && IsOverlapping(repairOrder.transform, voiceCommandGuide.transform))
+            SetPositionVoiceCommandUI();
+
+        if (checkList.activeInHierarchy && IsOverlapping(repairOrder.transform, checkList.transform))
+            HideChecklist();
+    }
     private void SetPositionVoiceCommandUI()
     {
         if (mainCamera == null) return;
@@ -253,11 +332,11 @@ public class InspectionCheckList : MonoBehaviour
             voiceCommandGuide.transform.rotation = Quaternion.LookRotation(lookDir);
     }
 
-    private bool IsOverlapping()
+    private bool IsOverlapping(Transform target1, Transform target2)
     {
-        Vector2 checklistPos = new Vector2(checkList.transform.position.x, checkList.transform.position.y);
-        Vector2 voiceGuidePos = new Vector2(voiceCommandGuide.transform.position.x, voiceCommandGuide.transform.position.y);
-        return Vector2.Distance(checklistPos, voiceGuidePos) < OVERLAP_THRESHOLD;
+        Vector2 T1 = new Vector2(target1.transform.position.x, target1.transform.position.y);
+        Vector2 T2 = new Vector2(target2.transform.position.x, target2.transform.position.y);
+        return Vector2.Distance(T1, T2) < OVERLAP_THRESHOLD;
     }
     #endregion
 

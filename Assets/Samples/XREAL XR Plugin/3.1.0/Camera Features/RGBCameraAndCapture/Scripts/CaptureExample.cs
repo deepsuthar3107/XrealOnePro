@@ -345,7 +345,8 @@ namespace Unity.XR.XREAL.Samples
                 m_VideoCapture.StartRecordingAsync(VideoSavePath, OnStartedRecordingVideo);
             }
 
-            m_PreviewRawImage.texture = m_VideoCapture.PreviewTexture;
+            if (m_PreviewRawImage != null)
+                m_PreviewRawImage.texture = m_VideoCapture.PreviewTexture;
         }
 
         /// <summary> Executes the 'started recording video' action. </summary>
