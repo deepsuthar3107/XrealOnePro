@@ -1,8 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
-using UnityEngine.XR.Interaction.Toolkit;
 
 public class AnnotationManager : MonoBehaviour
 {
@@ -23,25 +22,19 @@ public class AnnotationManager : MonoBehaviour
     [SerializeField] private XROrigin xrOrigin;
 
     private AnnotationShape currentAnnotation;
-    private List<AnnotationShape> cachedAnnotations = new List<AnnotationShape>();
-    private List<ARAnchor> spawnedAnchors = new List<ARAnchor>(); // Track anchors
+    private List<AnnotationShape> cachedAnnotations = new();
+    private List<ARAnchor> spawnedAnchors = new();
 
     private void Start()
     {
-        // Auto-find AR components if not assigned
         if (anchorManager == null)
-        {
             anchorManager = FindObjectOfType<ARAnchorManager>();
-            if (anchorManager == null)
-            {
-                Debug.LogWarning("ARAnchorManager not found! Annotations may drift on device.");
-            }
-        }
 
         if (xrOrigin == null)
-        {
             xrOrigin = FindObjectOfType<XROrigin>();
-        }
+
+        if (anchorManager == null)
+            Debug.LogError("ARAnchorManager NOT found – annotations WILL drift on device!");
     }
 
     private void Update()
@@ -49,215 +42,164 @@ public class AnnotationManager : MonoBehaviour
         HandleAnnotationSelection();
     }
 
+    #region Commands
     public void ProcessCommand(string command)
     {
-        if (IsCircleCommand(command))
-        {
-            MarkCircle();
-            return;
-        }
-        else if (IsSquareCommand(command))
-        {
-            MarkSquare();
-            return;
-        }
-        else if (IsDeleteCommand(command))
-        {
-            DeleteSelectedAnnotation();
-            return;
-        }
-        else if (IsDeleteAllCommand(command))
-        {
-            DeleteAllAnnotations();
-            return;
-        }
+        command = command.ToLower();
+        if (IsCircleCommand(command)) MarkCircle();
+        else if (IsSquareCommand(command)) MarkSquare();
+        else if (IsDeleteCommand(command)) DeleteSelectedAnnotation();
+        else if (IsDeleteAllCommand(command)) DeleteAllAnnotations();
     }
+    #endregion
 
     #region Selection
     private void HandleAnnotationSelection()
     {
-        Ray ray = new Ray(startPoint.position, startPoint.forward);
-        bool hitSomething = Physics.Raycast(ray, out RaycastHit hit, maxDistance);
+        Ray ray = new(startPoint.position, startPoint.forward);
 
-        Debug.DrawRay(ray.origin, ray.direction * maxDistance, hitSomething ? Color.green : Color.red);
-
-        if (hitSomething)
+        if (Physics.Raycast(ray, out RaycastHit hit, maxDistance))
         {
-            AnnotationShape newAnnotation = hit.collider.GetComponent<AnnotationShape>();
+            AnnotationShape shape = hit.collider.GetComponent<AnnotationShape>();
 
-            if (newAnnotation != null)
+            if (shape != null)
             {
-                if (currentAnnotation != null && currentAnnotation != newAnnotation)
-                    currentAnnotation.DeselectAnnotation();
-
-                currentAnnotation = newAnnotation;
-                currentAnnotation.SelectAnnotation();
+                if (currentAnnotation != shape)
+                {
+                    currentAnnotation?.DeselectAnnotation();
+                    currentAnnotation = shape;
+                    currentAnnotation.SelectAnnotation();
+                }
                 return;
             }
         }
 
-        // Deselect if nothing valid was hit
-        if (currentAnnotation != null)
+        if(currentAnnotation != null)
         {
-            currentAnnotation.DeselectAnnotation();
+            currentAnnotation?.DeselectAnnotation();
             currentAnnotation = null;
-        }
+        }    
     }
     #endregion
 
     #region Spawning
-    [ContextMenu("Mark Square")]
-    public void MarkSquare()
-    {
-        SpawnAnnotation(squareAnnotationPrefab);
-    }
+    public void MarkSquare() => SpawnAnnotation(squareAnnotationPrefab);
+    public void MarkCircle() => SpawnAnnotation(circleAnnotationPrefab);
 
-    [ContextMenu("Mark Circle")]
-    public void MarkCircle()
+    private void SpawnAnnotation(GameObject prefab)
     {
-        SpawnAnnotation(circleAnnotationPrefab);
-    }
-
-    private void SpawnAnnotation(GameObject annotationPrefab)
-    {
-        if (annotationPrefab == null)
-        {
-            Debug.LogWarning("Annotation prefab is null!");
+        if (prefab == null || anchorManager == null)
             return;
-        }
 
         if (IsAnnotationAtEndPoint())
+            return;
+
+        Pose pose = new Pose(
+            endPoint.position,
+            Quaternion.identity 
+        );
+
+        SpawnWithAnchor(prefab, pose);
+    }
+
+    private void SpawnWithAnchor(GameObject prefab, Pose pose)
+    {
+        if (anchorManager == null || xrOrigin == null)
         {
-            Debug.Log("Annotation already exists here. Not spawning.");
+            Debug.LogError("Missing ARAnchorManager or XROrigin");
             return;
         }
 
-        Quaternion rotation = startPoint.forward != Vector3.zero
-            ? Quaternion.LookRotation(startPoint.forward)
-            : Quaternion.identity;
+        // 1️⃣ Create anchor GameObject
+        GameObject anchorGO = new GameObject("AnnotationAnchor");
 
-        // NEW: Create with AR Anchor for stability on device
-        if (anchorManager != null)
+        // 2️⃣ Parent to TrackablesParent (CRITICAL)
+        anchorGO.transform.SetParent(xrOrigin.TrackablesParent, false);
+
+        // 3️⃣ Set world pose ONCE
+        anchorGO.transform.SetPositionAndRotation(
+            pose.position,
+            pose.rotation
+        );
+
+        // 4️⃣ Add ARAnchor component (modern API)
+        ARAnchor anchor = anchorGO.AddComponent<ARAnchor>();
+
+        if (anchor.trackingState == UnityEngine.XR.ARSubsystems.TrackingState.None)
         {
-            SpawnWithAnchor(annotationPrefab, endPoint.position, rotation);
+            Debug.LogWarning("Anchor tracking not ready yet");
         }
+
+        // 5️⃣ Instantiate annotation as child
+        GameObject annotation = Instantiate(prefab, anchor.transform);
+        annotation.transform.localPosition = Vector3.zero;
+
+        // Face camera ONCE at spawn
+        Vector3 directionToCamera = Camera.main.transform.position - anchor.transform.position;
+
+        // Zero out Y if you want upright only
+        directionToCamera.y = 0f;
+
+        if (directionToCamera.sqrMagnitude > 0f)
+            annotation.transform.rotation = Quaternion.LookRotation(directionToCamera);
         else
-        {
-            // Fallback: spawn without anchor (will work in editor but may drift on device)
-            GameObject annotation = Instantiate(annotationPrefab, endPoint.position, rotation);
+            annotation.transform.rotation = Quaternion.identity;
 
-            // Parent to XR Origin's TrackablesParent if available
-            if (xrOrigin != null)
-            {
-                Transform trackablesParent = xrOrigin.TrackablesParent;
-                if (trackablesParent != null)
-                {
-                    annotation.transform.SetParent(trackablesParent);
-                }
-            }
 
-            Debug.LogWarning("Spawned without AR Anchor - may drift on device!");
-        }
+        spawnedAnchors.Add(anchor);
     }
 
-    // NEW METHOD: Spawn annotation with AR Anchor
-    private void SpawnWithAnchor(GameObject annotationPrefab, Vector3 position, Quaternion rotation)
-    {
-        // Create a GameObject at the spawn position
-        GameObject anchorObject = new GameObject("Annotation Anchor");
-        anchorObject.transform.position = position;
-        anchorObject.transform.rotation = rotation;
-
-        // Add ARAnchor component (new API)
-        ARAnchor anchor = anchorObject.AddComponent<ARAnchor>();
-
-        if (anchor != null)
-        {
-            // Instantiate annotation as child of anchor
-            GameObject annotation = Instantiate(annotationPrefab, anchorObject.transform);
-            annotation.transform.localPosition = Vector3.zero;
-            annotation.transform.localRotation = Quaternion.identity;
-
-            // Track the anchor for cleanup
-            spawnedAnchors.Add(anchor);
-
-            Debug.Log($"Annotation spawned with AR Anchor at: {position}");
-        }
-        else
-        {
-            Debug.LogError("Failed to create AR Anchor! Annotation may drift.");
-            // Fallback to non-anchored spawn
-            Destroy(anchorObject);
-            Instantiate(annotationPrefab, position, rotation);
-        }
-    }
 
     private bool IsAnnotationAtEndPoint()
     {
-        Collider[] colliders = Physics.OverlapSphere(endPoint.position, annotationCheckRadius);
+        Collider[] hits = Physics.OverlapSphere(endPoint.position, annotationCheckRadius);
 
-        foreach (var col in colliders)
-        {
+        foreach (Collider col in hits)
             if (col.GetComponent<AnnotationShape>() != null)
                 return true;
-        }
 
         return false;
     }
     #endregion
 
     #region Deletion
-    [ContextMenu("Delete Selected Annotation")]
     public void DeleteSelectedAnnotation()
     {
         RefreshAnnotationCache();
 
         foreach (var shape in cachedAnnotations)
         {
-            if (shape.isSelected)
-            {
-                // NEW: Also destroy the anchor if it exists
-                ARAnchor anchor = shape.GetComponentInParent<ARAnchor>();
-                if (anchor != null)
-                {
-                    spawnedAnchors.Remove(anchor);
-                    Destroy(anchor.gameObject); // Destroys anchor and its children
-                }
-                else
-                {
-                    Destroy(shape.gameObject);
-                }
+            if (!shape.isSelected)
+                continue;
 
-                currentAnnotation = null;
-                return;
-            }
-        }
-
-        Debug.Log("No selected annotation to delete.");
-    }
-
-    [ContextMenu("Delete All Annotations")]
-    public void DeleteAllAnnotations()
-    {
-        RefreshAnnotationCache();
-
-        foreach (var shape in cachedAnnotations)
-        {
-            // NEW: Check if annotation has an anchor parent
             ARAnchor anchor = shape.GetComponentInParent<ARAnchor>();
+
             if (anchor != null)
             {
-                Destroy(anchor.gameObject); // Destroys anchor and children
+                spawnedAnchors.Remove(anchor);
+                Destroy(anchor.gameObject);
             }
             else
             {
                 Destroy(shape.gameObject);
             }
+
+            currentAnnotation = null;
+            return;
+        }
+    }
+
+    public void DeleteAllAnnotations()
+    {
+        foreach (ARAnchor anchor in spawnedAnchors)
+        {
+            if (anchor != null)
+                Destroy(anchor.gameObject);
         }
 
-        currentAnnotation = null;
-        cachedAnnotations.Clear();
         spawnedAnchors.Clear();
+        cachedAnnotations.Clear();
+        currentAnnotation = null;
     }
 
     private void RefreshAnnotationCache()
@@ -267,14 +209,14 @@ public class AnnotationManager : MonoBehaviour
     #endregion
 
     private bool IsCircleCommand(string cmd) =>
-     cmd == "mark circle";
+    cmd.Contains("mark circle");
 
     private bool IsSquareCommand(string cmd) =>
-        cmd == "mark square";
+        cmd.Contains("mark square");
 
     private bool IsDeleteCommand(string cmd) =>
-        cmd == "delete" || cmd == "erase" || cmd == "clear" || cmd == "remove";
+        cmd.Contains("delete") || cmd.Contains("erase") || cmd.Contains("clear") || cmd.Contains("remove");
 
     private bool IsDeleteAllCommand(string cmd) =>
-       cmd == "delete all annotation" || cmd == "remove all annotation" || cmd == "clear all annotation";
+       cmd.Contains("delete all annotation") || cmd.Contains("remove all annotation") || cmd.Contains("clear all annotation");
 }
