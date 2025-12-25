@@ -116,10 +116,6 @@ public class InspectionCheckList : MonoBehaviour
         else if (IsHideVoiceCommandUI(cmd)) { HideVoiceCommandUI(); return; }
         else if (IsNextCommand(cmd)) { DoNextSelection(); return; }
         else if (IsPreviousCommand(cmd)) { DoPreviousSelection(); return; }
-        else if (hasStatus && matchedIndex == -1)
-        {
-            ApplyStatus(cmd);
-        }
         else if (matchedIndex != -1)
         {
             SelectItem(matchedIndex);
@@ -127,8 +123,16 @@ public class InspectionCheckList : MonoBehaviour
                 ApplyStatus(cmd);
             return;
         }
+        /* else if (hasStatus && matchedIndex == -1)
+         {
+             ApplyStatus(cmd);
+         }*/
+        else if (hasStatus && IsOnlyStatusCommand(cmd))
+        {
+            ApplyStatus(cmd);
+            return;
+        }
 
-       
     }
     #endregion
 
@@ -322,12 +326,31 @@ public class InspectionCheckList : MonoBehaviour
         IsCheckCommand(cmd) || IsPassCommand(cmd) ||
         IsWarningCommand(cmd) || IsFailCommand(cmd) || IsUncheckCommand(cmd);
 
+    private bool IsOnlyStatusCommand(string cmd)
+    {
+        string[] words = cmd.Split(' ');
+
+        foreach (string w in words)
+        {
+            if (
+                w != "mark" && w != "check" && w != "done" &&
+                w != "pass" && w != "green" && w != "good" &&
+                w != "fail" && w != "red" && w != "bad" && w != "bed" &&
+                w != "warning" && w != "yellow" && w != "caution" &&
+                w != "unmark" && w != "unmarked" && w != "uncheck"
+            )
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 
     private bool IsShowCommand(string cmd) =>
         cmd.Contains("show checklist") || cmd.Contains("open checklist") || cmd.Contains("view checklist") || cmd == "checklist";
 
     private bool IsHideCommand(string cmd) =>
-        cmd.Contains("hide checklist") || cmd.Contains("close checklist");
+        cmd.Contains("hide checklist") || cmd.Contains("close checklist") || cmd.Contains("dismiss checklist");
 
     private bool IsShowVoiceCommandUI(string cmd) =>
         cmd.Contains("open help") || cmd.Contains("show help");
@@ -360,7 +383,7 @@ public class InspectionCheckList : MonoBehaviour
         cmd.Contains("warning") || cmd.Contains("yellow") || cmd.Contains("caution");
 
     private bool IsFailCommand(string cmd) =>
-        cmd.Contains("fail") || cmd.Contains("red") || cmd.Contains("bad");
+        cmd.Contains("fail") || cmd.Contains("red") || cmd.Contains("bad") || cmd.Contains("bed");
     #endregion
 
     #region Utils

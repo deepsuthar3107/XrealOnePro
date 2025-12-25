@@ -17749,7 +17749,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0.0609}
+  m_AnchoredPosition: {x: 0.308, y: 0.091}
   m_SizeDelta: {x: 100, y: 116.25462}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &869222630
@@ -27391,7 +27391,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0.0454}
+  m_AnchoredPosition: {x: 0.308, y: 0.07549999}
   m_SizeDelta: {x: 100, y: 143.52592}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1281762418
@@ -28814,6 +28814,7 @@ MonoBehaviour:
   checkList: {fileID: 869222628}
   repairOrder: {fileID: 1281762416}
   voiceCommandGuide: {fileID: 424078090}
+  requiredWordMatch: 2
   OptionUI: {fileID: 1922351189}
   Count: {fileID: 279834524}
 --- !u!1 &1372574117
