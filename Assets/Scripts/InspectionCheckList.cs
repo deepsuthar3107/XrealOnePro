@@ -1,5 +1,6 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -29,12 +30,13 @@ public class InspectionCheckList : MonoBehaviour
     #region Private Fields
     private List<GameObject> ticks = new List<GameObject>();
     private List<GameObject> selections = new List<GameObject>();
+    public List<TextMeshProUGUI> checklistItemsText = new List<TextMeshProUGUI>();
+
     private int currentIndex = 0;
     private bool isReady = true;
     private Camera mainCamera;
-    #endregion
-
     private Coroutine waitCoroutine;
+    #endregion
 
     #region Unity Lifecycle
     private void Awake()
@@ -45,6 +47,7 @@ public class InspectionCheckList : MonoBehaviour
         checkList.SetActive(false);
         repairOrder.SetActive(false);
     }
+
     private void Start()
     {
         waitCoroutine = StartCoroutine(WaitForOptions());
@@ -54,20 +57,21 @@ public class InspectionCheckList : MonoBehaviour
     #region Initialization
     IEnumerator WaitForOptions()
     {
-        float countingTime = 6f; // countdown in seconds
+        float countingTime = 6f;
         OptionUI.SetActive(true);
 
         while (countingTime > 0f)
         {
-            countingTime -= Time.deltaTime;              // decrease by elapsed time
-            Count.text = Mathf.CeilToInt(countingTime).ToString(); // show integer countdown
+            countingTime -= Time.deltaTime;
+            Count.text = Mathf.CeilToInt(countingTime).ToString();
             yield return null;
         }
 
-        OptionUI.SetActive(false);  // hide UI after countdown
+        OptionUI.SetActive(false);
         yield return new WaitForSeconds(1f);
-        InitializeVoiceCommandUI();
+        voiceCommandGuide.SetActive(true);
     }
+
     public void StopCoroutineSafe()
     {
         if (waitCoroutine != null)
@@ -75,26 +79,6 @@ public class InspectionCheckList : MonoBehaviour
             StopCoroutine(waitCoroutine);
             waitCoroutine = null;
         }
-    }
-
-    private void InitializeVoiceCommandUI()
-    {
-        voiceCommandGuide.SetActive(true);
-        SetInitialVoiceCommandPosition();
-    }
-
-    private void SetInitialVoiceCommandPosition()
-    {
-        if (mainCamera == null) return;
-
-        Transform camTransform = mainCamera.transform;
-        voiceCommandGuide.transform.position = camTransform.position + camTransform.forward * VOICE_GUIDE_DISTANCE;
-
-        Vector3 lookDir = voiceCommandGuide.transform.position - camTransform.position;
-        lookDir.y = 0f;
-
-        if (lookDir.sqrMagnitude > 0.001f)
-            voiceCommandGuide.transform.rotation = Quaternion.LookRotation(lookDir);
     }
 
     private void InitializeChecklistElements()
@@ -107,10 +91,10 @@ public class InspectionCheckList : MonoBehaviour
                 ticks.Add(child.gameObject);
             else if (child.name == "selection")
                 selections.Add(child.gameObject);
-        }
 
-        if (ticks.Count != selections.Count)
-            Debug.LogWarning($"Mismatch: {ticks.Count} ticks vs {selections.Count} selections");
+            if (child.name == "TXT" && child.GetComponent<TextMeshProUGUI>())
+                checklistItemsText.Add(child.GetComponent<TextMeshProUGUI>());
+        }
     }
     #endregion
 
@@ -118,161 +102,136 @@ public class InspectionCheckList : MonoBehaviour
     public void ProcessCommand(string command)
     {
         if (string.IsNullOrEmpty(command)) return;
+        command = NormalizeText(command);
 
-        command = command.ToLower().Trim();
 
-        // Cheklist Visibility
+        // Visibility
         if (IsShowCommand(command)) { ShowChecklist(); return; }
         if (IsHideCommand(command)) { HideChecklist(); return; }
-     
-        // RO Visibility
         if (IsShowROCommand(command)) { ShowRO(); return; }
         if (IsHideROCommand(command)) { HideRO(); return; }
-
-        // Voice UI
-        if (IsShowVoiceCommandUI(command)) 
-        {
-            StopCoroutineSafe();
-            OptionUI.SetActive(false);  
-            ShowVoiceCommandUI(); return; 
-        }
+        if (IsShowVoiceCommandUI(command)) { StopCoroutineSafe(); ShowVoiceCommandUI(); return; }
         if (IsHideVoiceCommandUI(command)) { HideVoiceCommandUI(); return; }
 
         // Navigation
         if (IsNextCommand(command)) { DoNextTick(); return; }
         if (IsPreviousCommand(command)) { DoPreviousTick(); return; }
 
-        // Marking
-        if (IsCheckCommand(command)) { MarkCurrentItem(); return; }
-        if (IsUncheckCommand(command)) { UnmarkCurrentItem(); return; }
+        // 🎯 ITEM + STATUS BASED COMMANDS
+        int itemIndex = FindChecklistItemIndex(command);
+        if (itemIndex != -1)
+        {
+            SelectItem(itemIndex);
 
-        // Status
-        if (IsPassCommand(command)) { MarkApprove(); return; }
-        if (IsWarningCommand(command)) { MarkWarning(); return; }
-        if (IsFailCommand(command)) { MarkFailed(); return; }
+            if (IsUncheckCommand(command))
+            {
+                UnmarkCurrentItem();
+                return;
+            }
+
+            if (IsFailCommand(command))
+            {
+                MarkFailed();
+                return;
+            }
+
+            if (IsWarningCommand(command))
+            {
+                MarkWarning();
+                return;
+            }
+
+            if (IsCheckCommand(command) || IsPassCommand(command))
+            {
+                MarkApprove();
+                return;
+            }
+        }
+
+        // Fallback (current selection)
+        if (IsCheckCommand(command)) MarkCurrentItem();
+        if (IsUncheckCommand(command)) UnmarkCurrentItem();
+        if (IsPassCommand(command)) MarkApprove();
+        if (IsWarningCommand(command)) MarkWarning();
+        if (IsFailCommand(command)) MarkFailed();
+    }
+    #endregion
+
+    #region Text Matching Helpers
+    private string NormalizeText(string text)
+    {
+        text = Regex.Replace(text, @"\([^)]*\)", "");
+        text = Regex.Replace(text, @"[^a-zA-Z0-9\s]", "");
+        return Regex.Replace(text, @"\s+", " ").Trim().ToLower();
     }
 
-    [ContextMenu("Next Item")]
+    private int FindChecklistItemIndex(string command)
+    {
+        string cmd = NormalizeText(command);
+
+        for (int i = 0; i < checklistItemsText.Count; i++)
+        {
+            string item = NormalizeText(checklistItemsText[i].text);
+            if (cmd.Contains(item))
+                return i;
+        }
+        return -1;
+    }
+
+    private void SelectItem(int index)
+    {
+        if (index < 0 || index >= selections.Count) return;
+
+        selections[currentIndex].SetActive(false);
+        currentIndex = index;
+        selections[currentIndex].SetActive(true);
+    }
+    #endregion
+
+    #region Navigation
     public void DoNextTick()
     {
         if (!CanNavigate() || currentIndex >= selections.Count - 1) return;
-
         selections[currentIndex].SetActive(false);
         currentIndex++;
         selections[currentIndex].SetActive(true);
         StartCoroutine(SetReadyAfterDelay());
     }
 
-    [ContextMenu("Previous Item")]
     public void DoPreviousTick()
     {
         if (!CanNavigate() || currentIndex <= 0) return;
-
         selections[currentIndex].SetActive(false);
         currentIndex--;
         selections[currentIndex].SetActive(true);
         StartCoroutine(SetReadyAfterDelay());
     }
 
-    [ContextMenu("Reset Checklist")]
     public void ResetChecklist()
     {
-        if (!checkList.activeInHierarchy) return;
-
         ticks.ForEach(t => t.SetActive(false));
         selections.ForEach(s => s.SetActive(false));
-
-        if (selections.Count > 0)
-            selections[0].SetActive(true);
-
+        if (selections.Count > 0) selections[0].SetActive(true);
         currentIndex = 0;
         isReady = true;
     }
+    #endregion
 
+    #region Tick Control
     public void MarkCurrentItem() => SetTickState(true, Color.green);
-    public void UnmarkCurrentItem() => SetTickState(false, Color.green);
+    public void UnmarkCurrentItem()
+    {
+        if (currentIndex < 0 || currentIndex >= ticks.Count) return;
+        ticks[currentIndex].SetActive(false);
+    }
+
     public void MarkApprove() => SetTickState(true, Color.green);
     public void MarkWarning() => SetTickState(true, Color.yellow);
     public void MarkFailed() => SetTickState(true, Color.red);
-    #endregion
-
-    #region Command Recognition
-    private bool IsShowCommand(string cmd) =>
-        cmd == "show checklist" || cmd == "view checklist" || cmd == "open checklist" || cmd == "checklist";
-
-    private bool IsHideCommand(string cmd) =>
-        cmd == "hide checklist" || cmd == "dismiss checklist" || cmd == "close checklist";
-
-    private bool IsShowVoiceCommandUI(string cmd) =>
-        cmd == "show voice command" || cmd == "open voice command" || cmd == "open voicecommand" || cmd == "show voicecommand";
-
-    private bool IsHideVoiceCommandUI(string cmd) =>
-        cmd == "hide voice command" || cmd == "close voice command" || cmd == "hide voicecommand" || cmd == "close voicecommand" || cmd == "close";
-    private bool IsShowROCommand(string cmd) =>
-       cmd == "show repair order" || cmd == "open repair order" || cmd == "open ro" || cmd == "show ro";
-
-    private bool IsHideROCommand(string cmd) =>
-        cmd == "hide repair order" || cmd == "close repair order" || cmd == "close ro" | cmd == "hide ro";
-
-    private bool IsNextCommand(string cmd) =>
-        cmd == "next" || cmd == "forward" || cmd == "down";
-
-    private bool IsPreviousCommand(string cmd) =>
-        cmd == "previous" || cmd == "back" || cmd == "up" || cmd == "prev";
-
-    private bool IsCheckCommand(string cmd) =>
-        cmd == "check" || cmd == "mark" || cmd == "done";
-
-    private bool IsUncheckCommand(string cmd) =>
-        cmd == "uncheck" || cmd == "unmark" || cmd == "unmarked";
-
-    private bool IsPassCommand(string cmd) =>
-        cmd == "pass" || cmd == "green" || cmd == "good";
-
-    private bool IsWarningCommand(string cmd) =>
-        cmd == "warning" || cmd == "yellow" || cmd == "caution";
-
-    private bool IsFailCommand(string cmd) =>
-        cmd == "fail" || cmd == "red" || cmd == "bad";
-    #endregion
-
-    #region Visibility Control
-    private void ShowChecklist()
-    {
-        checkList.SetActive(true);
-        SetChecklistPosition();
-        OptionUI.SetActive(false);
-    }
-
-    private void HideChecklist() => checkList.SetActive(false);
-
-    private void ShowRO()
-    {
-        repairOrder.SetActive(true);
-        SetRepairOrdertPosition();
-        OptionUI.SetActive(false);
-    }
-
-    private void HideRO() => repairOrder.SetActive(false);
-    private void ShowVoiceCommandUI()
-    {
-        OptionUI.SetActive(false);
-        voiceCommandGuide.SetActive(true);
-        SetPositionVoiceCommandUI();
-    }
-    private void HideVoiceCommandUI() => voiceCommandGuide.SetActive(false);
-    #endregion
-
-    #region Internal Logic
-    private bool CanNavigate() =>
-        gameObject.activeInHierarchy && isReady && selections.Count > 0;
-
-    private bool IsValidCurrentIndex() =>
-        isReady && currentIndex >= 0 && currentIndex < ticks.Count;
 
     private void SetTickState(bool active, Color color)
     {
-        if (!IsValidCurrentIndex()) return;
+        if (currentIndex < 0 || currentIndex >= ticks.Count) return;
 
         GameObject tick = ticks[currentIndex];
         tick.SetActive(active);
@@ -281,6 +240,84 @@ public class InspectionCheckList : MonoBehaviour
         if (tickImage != null)
             tickImage.color = color;
     }
+
+    #endregion
+
+
+    #region Command Recognition (Boolean Based)
+    private bool IsShowCommand(string cmd) =>
+        cmd.Contains("show checklist") || cmd.Contains("view checklist") ||
+        cmd.Contains("open checklist") || cmd == "checklist";
+
+    private bool IsHideCommand(string cmd) =>
+        cmd.Contains("hide checklist") || cmd.Contains("dismiss checklist") ||
+        cmd.Contains("close checklist");
+
+    private bool IsShowVoiceCommandUI(string cmd) =>
+     cmd.Contains("show voice command") || cmd.Contains("open voice command") ||
+     cmd.Contains("show voicecommand") || cmd.Contains("open voicecommand");
+
+    private bool IsHideVoiceCommandUI(string cmd) =>
+        cmd.Contains("hide voice command") || cmd.Contains("close voice command") ||
+        cmd.Contains("hide voicecommand") || cmd.Contains("close voicecommand") || cmd == "close";
+
+    private bool IsShowROCommand(string cmd) =>
+    cmd.Contains("show repair order") || cmd.Contains("open repair order") ||
+    cmd.Contains("show ro") || cmd.Contains("open ro");
+
+    private bool IsHideROCommand(string cmd) =>
+        cmd.Contains("hide repair order") || cmd.Contains("close repair order") ||
+        cmd.Contains("close ro") || cmd.Contains("hide ro");
+
+    private bool IsNextCommand(string cmd) =>
+     cmd.Contains("next") || cmd.Contains("forward") || cmd.Contains("down");
+
+    private bool IsPreviousCommand(string cmd) =>
+        cmd.Contains("previous") || cmd.Contains("back") || cmd.Contains("up") || cmd.Contains("prev");
+
+    private bool IsCheckCommand(string cmd) =>
+      cmd.Contains("check") || cmd.Contains("mark") || cmd.Contains("done");
+
+    private bool IsUncheckCommand(string cmd) =>
+        cmd.Contains("uncheck") || cmd.Contains("unmark");
+
+    private bool IsPassCommand(string cmd) =>
+        cmd.Contains("pass") || cmd.Contains("green") || cmd.Contains("good");
+
+    private bool IsWarningCommand(string cmd) =>
+        cmd.Contains("warning") || cmd.Contains("yellow") || cmd.Contains("caution");
+
+    private bool IsFailCommand(string cmd) =>
+        cmd.Contains("fail") || cmd.Contains("red") || cmd.Contains("bad");
+
+    #endregion
+
+    #region Visibility
+    private void ShowChecklist() 
+    { 
+        checkList.SetActive(true); 
+        OptionUI.SetActive(false);
+
+       // SetChecklistPosition();
+        HideRO(); 
+    }
+    private void HideChecklist() => checkList.SetActive(false);
+    private void ShowRO() 
+    { 
+        repairOrder.SetActive(true); 
+        OptionUI.SetActive(false);
+
+       // SetRepairOrdertPosition();
+        HideChecklist(); 
+    }
+    private void HideRO() => repairOrder.SetActive(false);
+    private void ShowVoiceCommandUI()
+    {
+        OptionUI.SetActive(false);
+        voiceCommandGuide.SetActive(true);
+      //  SetPositionVoiceCommandUI();
+    }
+    private void HideVoiceCommandUI() => voiceCommandGuide.SetActive(false);
     #endregion
 
     #region Positioning
@@ -340,7 +377,10 @@ public class InspectionCheckList : MonoBehaviour
     }
     #endregion
 
-    #region Coroutines
+    #region Helpers
+    private bool CanNavigate() => gameObject.activeInHierarchy && isReady && selections.Count > 0;
+
+
     private IEnumerator SetReadyAfterDelay()
     {
         isReady = false;
