@@ -77,6 +77,7 @@ public class InspectionCheckList : MonoBehaviour
         OptionUI.SetActive(false);
         yield return new WaitForSeconds(1f);
         voiceCommandGuide.SetActive(true);
+        SetPositionVoiceCommandUI();
     }
 
     private void StopCoroutineSafe()
@@ -181,6 +182,29 @@ public class InspectionCheckList : MonoBehaviour
         else if (IsCheckCommand(cmd) || IsPassCommand(cmd)) Mark(Color.green);
     }
 
+    public void changeTickColor(int colorNo)
+    {
+        foreach (var t in ticks)
+        {
+            if(!t.activeInHierarchy)
+            {
+                switch (colorNo)
+                {
+                    case 1:
+                        t.GetComponent<Image>().color = Color.green;
+                        break;
+
+                    case 2:
+                        t.GetComponent<Image>().color = Color.yellow;
+                        break;
+
+                    case 3:
+                        t.GetComponent<Image>().color = Color.red;
+                        break;
+                }
+            }   
+        }
+    }
     private void Mark(Color c)
     {
         ticks[currentIndex].SetActive(true);
@@ -230,37 +254,37 @@ public class InspectionCheckList : MonoBehaviour
     #endregion
 
     #region Visibility & Positioning
-    private void ShowChecklist()
+    public void ShowChecklist()
     {
         OptionUI.SetActive(false);
         checkList.SetActive(true);
        
-        // SetChecklistPosition();
+        SetChecklistPosition();
         HideRO();
     }
 
-    private void HideChecklist() => checkList.SetActive(false);
+    public void HideChecklist() => checkList.SetActive(false);
 
-    private void ShowRO()
+    public void ShowRO()
     {
         OptionUI.SetActive(false);
         repairOrder.SetActive(true);
        
-        // SetRepairOrdertPosition();
+        SetRepairOrdertPosition();
         HideChecklist();
     }
 
-    private void HideRO() => repairOrder.SetActive(false);
+    public void HideRO() => repairOrder.SetActive(false);
 
-    private void ShowVoiceCommandUI()
+    public void ShowVoiceCommandUI()
     {
         OptionUI.SetActive(false);
         voiceCommandGuide.SetActive(true);
         
-        //SetPositionVoiceCommandUI();
+        SetPositionVoiceCommandUI();
     }
 
-    private void HideVoiceCommandUI() => voiceCommandGuide.SetActive(false);
+    public void HideVoiceCommandUI() => voiceCommandGuide.SetActive(false);
     #endregion
 
     #region Positioning
@@ -268,37 +292,41 @@ public class InspectionCheckList : MonoBehaviour
     {
         if (mainCamera == null) return;
 
-        Transform camTransform = mainCamera.transform;
+        /*Transform camTransform = mainCamera.transform;
         checkList.transform.position = camTransform.position +
             camTransform.forward * CHECKLIST_DISTANCE +
             camTransform.right * CHECKLIST_OFFSET;
-        checkList.transform.rotation = Quaternion.LookRotation(camTransform.forward, Vector3.up);
+        checkList.transform.rotation = Quaternion.LookRotation(camTransform.forward, Vector3.up);*/
 
         if (voiceCommandGuide.activeInHierarchy && IsOverlapping(checkList.transform, voiceCommandGuide.transform))
             SetPositionVoiceCommandUI();
 
-        if (repairOrder.activeInHierarchy && IsOverlapping(checkList.transform, repairOrder.transform))
-            HideRO();
+        /*if (repairOrder.activeInHierarchy && IsOverlapping(checkList.transform, repairOrder.transform))
+            HideRO();*/
     }
     private void SetRepairOrdertPosition()
     {
         if (mainCamera == null) return;
 
-        Transform camTransform = mainCamera.transform;
+       /* Transform camTransform = mainCamera.transform;
         repairOrder.transform.position = camTransform.position +
             camTransform.forward * CHECKLIST_DISTANCE +
             camTransform.right * CHECKLIST_OFFSET;
-        repairOrder.transform.rotation = Quaternion.LookRotation(camTransform.forward, Vector3.up);
+        repairOrder.transform.rotation = Quaternion.LookRotation(camTransform.forward, Vector3.up);*/
 
         if (voiceCommandGuide.activeInHierarchy && IsOverlapping(repairOrder.transform, voiceCommandGuide.transform))
             SetPositionVoiceCommandUI();
 
-        if (checkList.activeInHierarchy && IsOverlapping(repairOrder.transform, checkList.transform))
-            HideChecklist();
+       /* if (checkList.activeInHierarchy && IsOverlapping(repairOrder.transform, checkList.transform))
+            HideChecklist();*/
     }
     private void SetPositionVoiceCommandUI()
     {
         if (mainCamera == null) return;
+
+        if (voiceCommandGuide.transform.parent != null) {
+            voiceCommandGuide.transform.parent = null;
+        }
 
         Transform camTransform = mainCamera.transform;
         voiceCommandGuide.transform.position = camTransform.position +

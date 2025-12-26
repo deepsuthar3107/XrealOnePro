@@ -22,7 +22,7 @@ MonoBehaviour:
   - RECORD_AUDIO
   - CAMERA
   - VIBRATION
-  EnableAutoLogcat: 0
+  EnableAutoLogcat: 1
   EnableNativeSessionManager: 0
   SupportDevices: 0100000002000000
   LicenseAsset: {fileID: 0}

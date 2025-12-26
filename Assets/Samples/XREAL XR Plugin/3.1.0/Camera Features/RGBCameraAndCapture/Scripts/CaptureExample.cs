@@ -29,6 +29,11 @@ namespace Unity.XR.XREAL.Samples
         [SerializeField] private string backendUploadUrl = "https://api.example.com/upload/video";
         [SerializeField] private bool autoUploadToBackend = true;
 
+        [Header("Recording Layer Filter")]
+        [Tooltip("Layers that WILL be recorded. Everything else will be ignored.")]
+        public LayerMask m_CullingMask;
+
+
         [SerializeField] private Button m_VideoButton;
         [SerializeField] private Button m_PhotoButton;
 
@@ -79,7 +84,7 @@ namespace Unity.XR.XREAL.Samples
             get
             {
                 string timeStamp = Time.time.ToString().Replace(".", "").Replace(":", "");
-                string filename = string.Format("Xreal_Record_{0}.mp4", timeStamp);
+                string filename = string.Format("TruVideo{0}.mp4", timeStamp);
                 return Path.Combine(Application.persistentDataPath, filename);
             }
         }
@@ -344,6 +349,8 @@ namespace Unity.XR.XREAL.Samples
             {
                 m_VideoCapture.StartRecordingAsync(VideoSavePath, OnStartedRecordingVideo);
             }
+           
+            m_VideoCapture.GetContext().GetBehaviour().CaptureCamera.cullingMask = m_CullingMask.value;
 
             if (m_PreviewRawImage != null)
                 m_PreviewRawImage.texture = m_VideoCapture.PreviewTexture;
@@ -386,7 +393,7 @@ namespace Unity.XR.XREAL.Samples
 
             var encoder = m_VideoCapture.GetContext().GetEncoder() as VideoEncoder;
             string path = encoder.EncodeConfig.outPutPath;
-            string filename = string.Format("Xreal_Shot_Video_{0}.mp4", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString());
+            string filename = string.Format("TruVideo_{0}.mp4", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString());
 
             StartCoroutine(DelayInsertVideoToGallery(path, filename, "Record"));
 
