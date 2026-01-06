@@ -12,6 +12,7 @@ public class InspectionCheckList : MonoBehaviour
     [Header("References")]
     [SerializeField] private GameObject checkList;
     [SerializeField] private GameObject repairOrder;
+    [SerializeField] private GameObject MPI_Info;
     [SerializeField] private GameObject voiceCommandGuide;
    
     [Header("Voice Matching Settings")]
@@ -113,6 +114,8 @@ public class InspectionCheckList : MonoBehaviour
         else if (IsHideCommand(cmd)) { HideChecklist(); return; }
         else if (IsShowROCommand(cmd)) { ShowRO(); return; }
         else if (IsHideROCommand(cmd)) { HideRO(); return; }
+        else if (IsShowMPICommand(cmd)) { ShowMPI(); return; }
+        else if (IsHideMPICommand(cmd)) { HideMPI(); return; }
         else if (IsShowVoiceCommandUI(cmd)) { StopCoroutineSafe(); ShowVoiceCommandUI(); return; }
         else if (IsHideVoiceCommandUI(cmd)) { HideVoiceCommandUI(); return; }
         else if (IsNextCommand(cmd)) { DoNextSelection(); return; }
@@ -261,6 +264,7 @@ public class InspectionCheckList : MonoBehaviour
        
         SetChecklistPosition();
         HideRO();
+        HideMPI();
     }
 
     public void HideChecklist() => checkList.SetActive(false);
@@ -270,12 +274,22 @@ public class InspectionCheckList : MonoBehaviour
         OptionUI.SetActive(false);
         repairOrder.SetActive(true);
        
-        SetRepairOrdertPosition();
+        SetRepairOrderPosition();
         HideChecklist();
+        HideMPI();
+    }  
+    public void HideRO() => repairOrder.SetActive(false);
+    public void ShowMPI()
+    {
+        OptionUI.SetActive(false);
+        MPI_Info.SetActive(true);
+
+        SetMPI_Info_Position();
+        HideChecklist();
+        HideRO();
     }
 
-    public void HideRO() => repairOrder.SetActive(false);
-
+    public void HideMPI() => MPI_Info.SetActive(false);
     public void ShowVoiceCommandUI()
     {
         OptionUI.SetActive(false);
@@ -304,7 +318,7 @@ public class InspectionCheckList : MonoBehaviour
         /*if (repairOrder.activeInHierarchy && IsOverlapping(checkList.transform, repairOrder.transform))
             HideRO();*/
     }
-    private void SetRepairOrdertPosition()
+    private void SetRepairOrderPosition()
     {
         if (mainCamera == null) return;
 
@@ -319,6 +333,22 @@ public class InspectionCheckList : MonoBehaviour
 
        /* if (checkList.activeInHierarchy && IsOverlapping(repairOrder.transform, checkList.transform))
             HideChecklist();*/
+    }
+    private void SetMPI_Info_Position()
+    {
+        if (mainCamera == null) return;
+
+        /* Transform camTransform = mainCamera.transform;
+         MPI_Info.transform.position = camTransform.position +
+             camTransform.forward * CHECKLIST_DISTANCE +
+             camTransform.right * CHECKLIST_OFFSET;
+         MPI_Info.transform.rotation = Quaternion.LookRotation(camTransform.forward, Vector3.up);*/
+
+        if (voiceCommandGuide.activeInHierarchy && IsOverlapping(MPI_Info.transform, voiceCommandGuide.transform))
+            SetPositionVoiceCommandUI();
+
+        /* if (MPI_Info.activeInHierarchy && IsOverlapping(MPI_Info.transform, checkList.transform))
+             HideChecklist();*/
     }
     private void SetPositionVoiceCommandUI()
     {
@@ -379,7 +409,13 @@ public class InspectionCheckList : MonoBehaviour
 
     private bool IsHideCommand(string cmd) =>
         cmd.Contains("hide checklist") || cmd.Contains("close checklist") || cmd.Contains("dismiss checklist");
+   
+    private bool IsShowMPICommand(string cmd) =>
+       cmd.Contains("show mpi") || cmd.Contains("open mpi");
 
+    private bool IsHideMPICommand(string cmd) =>
+        cmd.Contains("hide mpi") || cmd.Contains("close mpi");
+  
     private bool IsShowVoiceCommandUI(string cmd) =>
         cmd.Contains("open help") || cmd.Contains("show help");
 
