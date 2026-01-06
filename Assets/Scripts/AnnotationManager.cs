@@ -66,7 +66,9 @@ public class AnnotationManager : MonoBehaviour
             {
                 if (currentAnnotation != shape)
                 {
-                    currentAnnotation?.DeselectAnnotation();
+                    if (currentAnnotation != null)
+                        currentAnnotation?.DeselectAnnotation();
+
                     currentAnnotation = shape;
                     currentAnnotation.SelectAnnotation();
                 }
@@ -83,7 +85,10 @@ public class AnnotationManager : MonoBehaviour
     #endregion
 
     #region Spawning
+    [ContextMenu("MarkSquare")]
     public void MarkSquare() => SpawnAnnotation(squareAnnotationPrefab);
+
+    [ContextMenu("MarkCircle")]
     public void MarkCircle() => SpawnAnnotation(circleAnnotationPrefab);
 
     private void SpawnAnnotation(GameObject prefab)
@@ -163,6 +168,7 @@ public class AnnotationManager : MonoBehaviour
     #endregion
 
     #region Deletion
+    [ContextMenu("DeleteSelectedAnnotation")]
     public void DeleteSelectedAnnotation()
     {
         RefreshAnnotationCache();
