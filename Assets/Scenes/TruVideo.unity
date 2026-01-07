@@ -13973,7 +13973,7 @@ GameObject:
   - component: {fileID: 736743420}
   - component: {fileID: 736743419}
   m_Layer: 5
-  m_Name: Reapair Order (RO)
+  m_Name: Repair Order (RO)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -13996,7 +13996,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
   m_AnchoredPosition: {x: 0, y: -8}
-  m_SizeDelta: {x: 27.5, y: 4}
+  m_SizeDelta: {x: 25.78, y: 4}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &736743419
 MonoBehaviour:
@@ -14032,7 +14032,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Reapair Order (RO)
+  m_text: Repair Order (RO)
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 32d16bcda88f48e429ad11a94773c4df, type: 2}
   m_sharedMaterial: {fileID: 1878788120381656097, guid: 32d16bcda88f48e429ad11a94773c4df,
@@ -23021,7 +23021,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_text: "15K mile Mazda factory service\n\t\u2022 Put on snow tires \r\n\t\u2022
-    Factory service \r\n\t\u2022 Top-off fluids  \r\n\t\u2022 Check breaks \r\n\t\u2022
+    Factory service \r\n\t\u2022 Top-off fluids  \r\n\t\u2022 Check brakes \r\n\t\u2022
     Mazda MPI"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 32d16bcda88f48e429ad11a94773c4df, type: 2}
