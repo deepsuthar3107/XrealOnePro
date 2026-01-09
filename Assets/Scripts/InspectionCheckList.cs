@@ -460,7 +460,8 @@ public class InspectionCheckList : MonoBehaviour
         t = Regex.Replace(t, @"\b&\b", "and");
         t = Regex.Replace(t, @"\bwheel\b", "will");
         t = Regex.Replace(t, @"\btire\b", "tyre");
-
+        t = Regex.Replace(t, @"\bbreak\b", "brake");
+        t = Regex.Replace(t, @"\bviper\b", "wiper");
         return Regex.Replace(t, @"\s+", " ").Trim().ToLower();
     }
 
