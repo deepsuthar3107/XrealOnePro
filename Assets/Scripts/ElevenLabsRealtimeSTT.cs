@@ -129,9 +129,9 @@ public class ElevenLabsRealtimeSTT : MonoBehaviour
             $"&language_code=en" +
             $"&commit_strategy=vad" +
             $"&vad_silence_threshold_secs={commandPauseThreshold}" +
-            $"&min_silence_duration_ms=600" +
-            $"&vad_threshold=0.4" +
-            $"&min_speech_duration_ms=200" +
+            $"&min_silence_duration_ms=400" +
+            $"&vad_threshold=0.35" +
+            $"&min_speech_duration_ms=150" +
             $"&include_timestamps=false" +
             $"&token={Uri.EscapeDataString(sessionToken)}";
 

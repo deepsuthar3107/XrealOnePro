@@ -353,7 +353,7 @@ public class InspectionCheckList : MonoBehaviour
     private void SetPositionVoiceCommandUI()
     {
         if (mainCamera == null) return;
-
+/*
         if (voiceCommandGuide.transform.parent != null) {
             voiceCommandGuide.transform.parent = null;
         }
@@ -367,7 +367,7 @@ public class InspectionCheckList : MonoBehaviour
         lookDir.y = 0f;
 
         if (lookDir.sqrMagnitude > 0.001f)
-            voiceCommandGuide.transform.rotation = Quaternion.LookRotation(lookDir);
+            voiceCommandGuide.transform.rotation = Quaternion.LookRotation(lookDir);*/
     }
 
     private bool IsOverlapping(Transform target1, Transform target2)
@@ -423,10 +423,16 @@ public class InspectionCheckList : MonoBehaviour
         cmd.Contains("close help") || cmd.Contains("hide help") || cmd == "close";
 
     private bool IsShowROCommand(string cmd) =>
-        cmd.Contains("show repair order") || cmd.Contains("show ro") || cmd.Contains("open repair order") || cmd.Contains("open ro");
+        cmd.Contains("show repair order") || cmd.Contains("open repair order") || cmd.Contains("so repair order")
+        || cmd.Contains("show ro")  || cmd.Contains("open ro") 
+        || cmd.Contains("so ro") || cmd.Contains("so arrow") || cmd.Contains("open arrow")
+        || cmd.Contains("so r o") || cmd.Contains("open r o");
 
     private bool IsHideROCommand(string cmd) =>
-        cmd.Contains("hide repair order") || cmd.Contains("hide ro") || cmd.Contains("close repair order") || cmd.Contains("close ro");
+        cmd.Contains("hide repair order") || cmd.Contains("close repair order") 
+        || cmd.Contains("hide ro")  || cmd.Contains("close ro")
+        || cmd.Contains("hide arrow") || cmd.Contains("close arrow") 
+        || cmd.Contains("close r o") || cmd.Contains("hide r o") ;
 
     private bool IsNextCommand(string cmd) =>
         cmd.Contains("next") || cmd.Contains("forward") || cmd.Contains("down");
