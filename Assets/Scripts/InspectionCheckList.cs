@@ -353,8 +353,9 @@ public class InspectionCheckList : MonoBehaviour
     private void SetPositionVoiceCommandUI()
     {
         if (mainCamera == null) return;
-/*
-        if (voiceCommandGuide.transform.parent != null) {
+
+        if (voiceCommandGuide.transform.parent != null)
+        {
             voiceCommandGuide.transform.parent = null;
         }
 
@@ -367,7 +368,7 @@ public class InspectionCheckList : MonoBehaviour
         lookDir.y = 0f;
 
         if (lookDir.sqrMagnitude > 0.001f)
-            voiceCommandGuide.transform.rotation = Quaternion.LookRotation(lookDir);*/
+            voiceCommandGuide.transform.rotation = Quaternion.LookRotation(lookDir);
     }
 
     private bool IsOverlapping(Transform target1, Transform target2)

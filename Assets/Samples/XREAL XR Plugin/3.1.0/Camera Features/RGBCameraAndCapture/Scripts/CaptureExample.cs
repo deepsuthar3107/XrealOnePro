@@ -3,10 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.Networking;
 using TMPro;
+using Unity.XR.XREAL.Samples.NetWork;
+using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.UI;
 
 namespace Unity.XR.XREAL.Samples
 {
@@ -101,6 +102,24 @@ namespace Unity.XR.XREAL.Samples
         /// <summary> The camera resolution. </summary>
         private Resolution m_CameraResolution;
         private bool isOnPhotoProcess = false;
+
+        private bool m_IsInitialized = false;
+        private bool m_IsStreamLock = false;
+        private bool m_IsStreamStarted = false;
+        private bool m_IsRecordStarted = false;
+        
+        private NetWorkBehaviour m_NetWorker;
+        private string m_ServerIP;
+        private string m_VideoPath;
+        private bool m_SavedLocal;
+        public string RTPPath
+        {
+            get
+            {
+                return string.Format(@"rtp://{0}:5555", m_ServerIP);
+            }
+        }
+
 
         void Awake()
         {
@@ -200,6 +219,27 @@ namespace Unity.XR.XREAL.Samples
             RefreshUIState();
         }
 
+        private void Update()
+        {
+            if (!m_IsStreamStarted)
+            {
+                if (m_VideoCapture == null)
+                {
+                    Invoke(nameof(OnStream), 1);
+                }
+                else if(m_VideoCapture != null && !m_VideoCapture.IsRecording)
+                {
+                    Invoke(nameof(OnStream), 1);
+                }    
+            }
+            else if (m_VideoCapture != null && m_VideoCapture.IsRecording && m_IsStreamStarted)
+            {
+                m_IsStreamStarted = false;
+                m_IsStreamLock = false;
+            }
+
+        }
+
         void OnSlideMicValueChange(float val)
         {
             if (m_VideoCapture != null)
@@ -222,19 +262,90 @@ namespace Unity.XR.XREAL.Samples
             RefreshUIState();
         }
 
-        void CreateVideoCapture(Action callback)
+        [ContextMenu("OnStream")]
+        private void OnStream()
         {
+            if (m_IsStreamLock)
+            {
+                return;
+            }
+            if (m_IsRecordStarted)
+            {
+                m_IsStreamLock = false;
+                return;
+            }
+            m_IsStreamLock = true;
+            if (m_NetWorker == null)
+            {
+                m_NetWorker = new NetWorkBehaviour();
+                m_NetWorker.Listen();
+            }
+
+            if (!m_IsStreamStarted)
+            {
+                LocalServerSearcher.CreateSingleton().Search((result) =>
+                {
+                    Debug.LogFormat("[FPStreammingCast] Get the server result:{0} ip:{1}:{2}", result.isSuccess, result.endPoint?.Address, result.endPoint.Port);
+                    if (result.isSuccess)
+                    {
+                        string ip = result.endPoint.Address.ToString();
+                        int port = result.endPoint.Port;
+                        m_NetWorker.CheckServerAvailable(ip, port, (isAvailable) =>
+                        {
+                            Debug.LogFormat("[FPStreammingCast] Is the server {0}:{1} ok? {2}", ip, result.endPoint.Port, isAvailable);
+                            if (isAvailable)
+                            {
+                                m_ServerIP = ip;
+                                m_IsStreamStarted = true;
+                                CreateAndStart();
+                            }
+                            m_IsStreamLock = false;
+                        });
+                    }
+                    else
+                    {
+                        m_IsStreamLock = false;
+                        Debug.LogError("[FPStreammingCast] Can not find the server...");
+                    }
+                });
+            }
+            else
+            {
+                StopVideoCapture();
+                m_IsStreamStarted = false;
+                m_IsStreamLock = false;
+            }
+
+        }
+
+        private void CreateAndStart()
+        {
+            CreateVideoCapture(delegate ()
+            {
+                Debug.LogFormat("[FPStreammingCast] Start video capture.");
+                StartVideoCapture();
+            });
+        }
+        private void CreateVideoCapture(Action callback)
+        {
+            Debug.LogFormat("[FPStreammingCast] Created VideoCapture Instance!");
+            if (m_VideoCapture != null)
+            {
+                callback?.Invoke();
+                return;
+            }
+
             XREALVideoCaptureUtility.CreateAsync(false, delegate (XREALVideoCapture videoCapture)
             {
-                Debug.Log("Created VideoCapture Instance!");
                 if (videoCapture != null)
                 {
                     m_VideoCapture = videoCapture;
+
                     callback?.Invoke();
                 }
                 else
                 {
-                    Debug.LogError("Failed to create VideoCapture Instance!");
+                    Debug.LogError("[FPStreammingCast] Failed to create VideoCapture Instance!");
                 }
             });
         }
@@ -290,8 +401,28 @@ namespace Unity.XR.XREAL.Samples
             cameraParameters.audioState = audioState;
             cameraParameters.captureSide = captureside;
             cameraParameters.backgroundColor = useGreenBackGround ? Color.green : Color.black;
-
-            m_VideoCapture.StartVideoModeAsync(cameraParameters, OnStartedVideoCaptureMode, true);
+          
+            if (m_NetWorker != null)
+            {
+                LitJson.JsonData json = new LitJson.JsonData();
+                json["useAudio"] = (cameraParameters.audioState != AudioState.None);
+                m_NetWorker.SendMsg(json, (response) =>
+                {
+                    bool result;
+                    if (bool.TryParse(response["success"].ToString(), out result) && result)
+                    {
+                        m_VideoCapture.StartVideoModeAsync(cameraParameters, OnStartedVideoCaptureMode, true);
+                    }
+                    else
+                    {
+                        Debug.LogError("[FPStreammingCast] Can not received response from server.");
+                    }
+                });
+            }
+            else
+            {
+                m_VideoCapture.StartVideoModeAsync(cameraParameters, OnStartedVideoCaptureMode, true);
+            }
         }
 
         private Resolution GetResolutionByLevel(ResolutionLevel level)
@@ -338,16 +469,18 @@ namespace Unity.XR.XREAL.Samples
                 return;
             }
 
+            m_VideoPath = m_IsStreamStarted ? RTPPath : VideoSavePath;
+            m_SavedLocal = !m_IsStreamStarted;
             Debug.Log("Started Video Capture Mode!");
             if (m_SliderMic != null && m_SliderApp != null)
             {
                 float volumeMic = m_SliderMic.value;
                 float volumeApp = m_SliderApp.value;
-                m_VideoCapture.StartRecordingAsync(VideoSavePath, OnStartedRecordingVideo, volumeMic, volumeApp);
+                m_VideoCapture.StartRecordingAsync(m_VideoPath, OnStartedRecordingVideo, volumeMic, volumeApp);
             }
             else
             {
-                m_VideoCapture.StartRecordingAsync(VideoSavePath, OnStartedRecordingVideo);
+                m_VideoCapture.StartRecordingAsync(m_VideoPath, OnStartedRecordingVideo);
             }
            
             m_VideoCapture.GetContext().GetBehaviour().CaptureCamera.cullingMask = m_CullingMask.value;
@@ -390,12 +523,17 @@ namespace Unity.XR.XREAL.Samples
         {
             Debug.Log("Stopped Video Capture Mode!");
             RefreshUIState();
+       
+            if (m_SavedLocal)
+            {
+                var encoder = m_VideoCapture.GetContext().GetEncoder() as VideoEncoder;
+                string path = encoder.EncodeConfig.outPutPath;
+                string filename = string.Format("TruVideo_{0}.mp4", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString());
 
-            var encoder = m_VideoCapture.GetContext().GetEncoder() as VideoEncoder;
-            string path = encoder.EncodeConfig.outPutPath;
-            string filename = string.Format("TruVideo_{0}.mp4", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString());
-
-            StartCoroutine(DelayInsertVideoToGallery(path, filename, "Record"));
+                StartCoroutine(DelayInsertVideoToGallery(path, filename, "Record"));
+                m_SavedLocal = false;
+            }
+           
 
             // Release video capture resource.
             m_VideoCapture.Dispose();

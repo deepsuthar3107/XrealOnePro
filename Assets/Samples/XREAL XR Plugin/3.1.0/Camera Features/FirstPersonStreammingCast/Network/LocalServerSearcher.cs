@@ -26,12 +26,22 @@ namespace Unity.XR.XREAL.Samples.NetWork
         private IPEndPoint m_LocalServer;
         private Queue<OnGetSearchResult> m_Tasks = new Queue<OnGetSearchResult>();
         private Coroutine m_TimeOutCoroutine = null;
-
-        public LocalServerSearcher()
+        protected override void Awake()
         {
+            base.Awake();
+
             client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
-            endpoint = new IPEndPoint(IPAddress.Parse("255.255.255.255"), BroadCastPort);
+            client.EnableBroadcast = true;
+
+            endpoint = new IPEndPoint(IPAddress.Broadcast, BroadCastPort);
         }
+
+
+        /*  public LocalServerSearcher()
+          {
+              client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
+              endpoint = new IPEndPoint(IPAddress.Parse("255.255.255.255"), BroadCastPort);
+          }*/
 
         public void Search(OnGetSearchResult callback)
         {
@@ -56,7 +66,6 @@ namespace Unity.XR.XREAL.Samples.NetWork
         {
             if (m_TimeOutCoroutine != null)
             {
-                Debug.Log("[LocalServerSearcher] StopTimeOutCoroutine");
                 StopCoroutine(m_TimeOutCoroutine);
                 m_TimeOutCoroutine = null;
             }
@@ -71,31 +80,38 @@ namespace Unity.XR.XREAL.Samples.NetWork
 
         private void RecvThread()
         {
-            IPEndPoint endpoint = new IPEndPoint(IPAddress.Any, BroadCastPort);
+            IPEndPoint remote = new IPEndPoint(IPAddress.Any, BroadCastPort);
+
             while (true)
             {
                 try
                 {
-                    byte[] buf = client.Receive(ref endpoint);
+                    byte[] buf = client.Receive(ref remote);
                     string data = Encoding.Default.GetString(buf);
-                    Debug.Log("[LocalServerSearcher] Get the server info:" + data);
-                    if (!string.IsNullOrEmpty(data))
-                    {
-                        string[] param = data.Split(':');
-                        if (param != null && param.Length == 2)
-                        {
-                            m_LocalServer = new IPEndPoint(IPAddress.Parse(param[0]), int.Parse(param[1]));
-                            Response(m_LocalServer);
-                            TryStopTimeOutCoroutine();
-                        }
-                    }
+
+                    if (string.IsNullOrEmpty(data))
+                        continue;
+
+                    string[] param = data.Split(':');
+                    if (param.Length != 2)
+                        continue;
+
+                    IPEndPoint server =
+                        new IPEndPoint(IPAddress.Parse(param[0]), int.Parse(param[1]));
+
+                    Response(server);
                 }
-                catch (Exception e)
+                catch (SocketException)
                 {
-                    throw e;
+                    return;
+                }
+                catch (Exception)
+                {
+                    return;
                 }
             }
         }
+
 
         private IEnumerator TimeOut()
         {
@@ -115,42 +131,29 @@ namespace Unity.XR.XREAL.Samples.NetWork
 
         private void Response(IPEndPoint endpoint)
         {
-            if (m_Tasks.Count == 0)
-            {
-                return;
-            }
-
             XREALMainThreadDispatcher.Singleton.QueueOnMainThread(() =>
             {
-                ServerInfoResult result = new ServerInfoResult();
-                result.endPoint = endpoint;
-                result.isSuccess = endpoint != null;
+                TryStopTimeOutCoroutine();
+
+                if (m_Tasks.Count == 0)
+                    return;
+
+                ServerInfoResult result = new ServerInfoResult
+                {
+                    endPoint = endpoint,
+                    isSuccess = endpoint != null
+                };
 
                 lock (m_Tasks)
                 {
-                    if (m_Tasks.Count == 0)
+                    while (m_Tasks.Count > 0)
                     {
-                        return;
-                    }
-                    var callback = m_Tasks.Dequeue();
-                    while (callback != null)
-                    {
-                        try
-                        {
-                            callback?.Invoke(result);
-                        }
-                        catch (Exception e)
-                        {
-                            throw e;
-                        }
-                        if (m_Tasks.Count == 0)
-                        {
-                            return;
-                        }
-                        callback = m_Tasks.Dequeue();
+                        var cb = m_Tasks.Dequeue();
+                        cb?.Invoke(result);
                     }
                 }
             });
         }
     }
+
 }
