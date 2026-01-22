@@ -146,7 +146,7 @@ namespace Unity.XR.XREAL.Samples
             RefreshUI();
         }
 
-        private void OnStream()
+        public void OnStream()
         {
             if (m_IsStreamLock)
             {

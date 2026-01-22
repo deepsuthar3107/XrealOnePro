@@ -25,14 +25,13 @@ namespace Unity.XR.XREAL.Samples
             Low,
         }
 
+        public FirstPersonStreammingCast firstPersonStreamming;
+
         [Header("Backend Settings")]
         public TextMeshProUGUI DebugTxt;
         [SerializeField] private string backendUploadUrl = "https://api.example.com/upload/video";
         [SerializeField] private bool autoUploadToBackend = true;
 
-        [Header("Recording Layer Filter")]
-        [Tooltip("Layers that WILL be recorded. Everything else will be ignored.")]
-        public LayerMask m_CullingMask;
 
 
         [SerializeField] private Button m_VideoButton;
@@ -76,6 +75,7 @@ namespace Unity.XR.XREAL.Samples
         public ResolutionLevel resolutionLevel = ResolutionLevel.High;
         public AudioState audioState = AudioState.ApplicationAudio;
         public CaptureSide captureside = CaptureSide.Single;
+        public LayerMask m_CullingMask;
         public bool useGreenBackGround = false;
 
         /// <summary> Save the video to Application.persistentDataPath. </summary>
@@ -102,24 +102,6 @@ namespace Unity.XR.XREAL.Samples
         /// <summary> The camera resolution. </summary>
         private Resolution m_CameraResolution;
         private bool isOnPhotoProcess = false;
-
-        private bool m_IsInitialized = false;
-        private bool m_IsStreamLock = false;
-        private bool m_IsStreamStarted = false;
-        private bool m_IsRecordStarted = false;
-        
-        private NetWorkBehaviour m_NetWorker;
-        private string m_ServerIP;
-        private string m_VideoPath;
-        private bool m_SavedLocal;
-        public string RTPPath
-        {
-            get
-            {
-                return string.Format(@"rtp://{0}:5555", m_ServerIP);
-            }
-        }
-
 
         void Awake()
         {
@@ -217,29 +199,44 @@ namespace Unity.XR.XREAL.Samples
             m_PhotoButton.onClick.AddListener(TakeAPhoto);
 
             RefreshUIState();
+           // Invoke(nameof(StartStream), 1);
         }
 
+        bool isStreamStarted = false;
         private void Update()
         {
-            if (!m_IsStreamStarted)
+            if (!isStreamStarted)
             {
                 if (m_VideoCapture == null)
                 {
-                    Invoke(nameof(OnStream), 1);
+                    Debug.Log("Temp");
+                    firstPersonStreamming.OnStream();
+                    isStreamStarted = true;
+                    return;
                 }
-                else if(m_VideoCapture != null && !m_VideoCapture.IsRecording)
+                else if (m_VideoCapture != null && !m_VideoCapture.IsRecording)
                 {
-                    Invoke(nameof(OnStream), 1);
-                }    
-            }
-            else if (m_VideoCapture != null && m_VideoCapture.IsRecording && m_IsStreamStarted)
-            {
-                m_IsStreamStarted = false;
-                m_IsStreamLock = false;
+                    Debug.Log("Temp2");
+                    firstPersonStreamming.OnStream();
+                    isStreamStarted = true;
+                    return;
+                }
+                return;
             }
 
+            if (m_VideoCapture != null && m_VideoCapture.IsRecording && isStreamStarted)
+            {
+                firstPersonStreamming.OnStream();
+                isStreamStarted = false;
+                return;
+            }
         }
 
+        public void StartStream()
+        {
+            firstPersonStreamming.OnStream();
+            isStreamStarted = true;
+        }
         void OnSlideMicValueChange(float val)
         {
             if (m_VideoCapture != null)
@@ -262,70 +259,6 @@ namespace Unity.XR.XREAL.Samples
             RefreshUIState();
         }
 
-        [ContextMenu("OnStream")]
-        private void OnStream()
-        {
-            if (m_IsStreamLock)
-            {
-                return;
-            }
-            if (m_IsRecordStarted)
-            {
-                m_IsStreamLock = false;
-                return;
-            }
-            m_IsStreamLock = true;
-            if (m_NetWorker == null)
-            {
-                m_NetWorker = new NetWorkBehaviour();
-                m_NetWorker.Listen();
-            }
-
-            if (!m_IsStreamStarted)
-            {
-                LocalServerSearcher.CreateSingleton().Search((result) =>
-                {
-                    Debug.LogFormat("[FPStreammingCast] Get the server result:{0} ip:{1}:{2}", result.isSuccess, result.endPoint?.Address, result.endPoint.Port);
-                    if (result.isSuccess)
-                    {
-                        string ip = result.endPoint.Address.ToString();
-                        int port = result.endPoint.Port;
-                        m_NetWorker.CheckServerAvailable(ip, port, (isAvailable) =>
-                        {
-                            Debug.LogFormat("[FPStreammingCast] Is the server {0}:{1} ok? {2}", ip, result.endPoint.Port, isAvailable);
-                            if (isAvailable)
-                            {
-                                m_ServerIP = ip;
-                                m_IsStreamStarted = true;
-                                CreateAndStart();
-                            }
-                            m_IsStreamLock = false;
-                        });
-                    }
-                    else
-                    {
-                        m_IsStreamLock = false;
-                        Debug.LogError("[FPStreammingCast] Can not find the server...");
-                    }
-                });
-            }
-            else
-            {
-                StopVideoCapture();
-                m_IsStreamStarted = false;
-                m_IsStreamLock = false;
-            }
-
-        }
-
-        private void CreateAndStart()
-        {
-            CreateVideoCapture(delegate ()
-            {
-                Debug.LogFormat("[FPStreammingCast] Start video capture.");
-                StartVideoCapture();
-            });
-        }
         private void CreateVideoCapture(Action callback)
         {
             Debug.LogFormat("[FPStreammingCast] Created VideoCapture Instance!");
@@ -401,28 +334,8 @@ namespace Unity.XR.XREAL.Samples
             cameraParameters.audioState = audioState;
             cameraParameters.captureSide = captureside;
             cameraParameters.backgroundColor = useGreenBackGround ? Color.green : Color.black;
-          
-            if (m_NetWorker != null)
-            {
-                LitJson.JsonData json = new LitJson.JsonData();
-                json["useAudio"] = (cameraParameters.audioState != AudioState.None);
-                m_NetWorker.SendMsg(json, (response) =>
-                {
-                    bool result;
-                    if (bool.TryParse(response["success"].ToString(), out result) && result)
-                    {
-                        m_VideoCapture.StartVideoModeAsync(cameraParameters, OnStartedVideoCaptureMode, true);
-                    }
-                    else
-                    {
-                        Debug.LogError("[FPStreammingCast] Can not received response from server.");
-                    }
-                });
-            }
-            else
-            {
-                m_VideoCapture.StartVideoModeAsync(cameraParameters, OnStartedVideoCaptureMode, true);
-            }
+
+            m_VideoCapture.StartVideoModeAsync(cameraParameters, OnStartedVideoCaptureMode, true);
         }
 
         private Resolution GetResolutionByLevel(ResolutionLevel level)
@@ -469,20 +382,18 @@ namespace Unity.XR.XREAL.Samples
                 return;
             }
 
-            m_VideoPath = m_IsStreamStarted ? RTPPath : VideoSavePath;
-            m_SavedLocal = !m_IsStreamStarted;
             Debug.Log("Started Video Capture Mode!");
             if (m_SliderMic != null && m_SliderApp != null)
             {
                 float volumeMic = m_SliderMic.value;
                 float volumeApp = m_SliderApp.value;
-                m_VideoCapture.StartRecordingAsync(m_VideoPath, OnStartedRecordingVideo, volumeMic, volumeApp);
+                m_VideoCapture.StartRecordingAsync(VideoSavePath, OnStartedRecordingVideo, volumeMic, volumeApp);
             }
             else
             {
-                m_VideoCapture.StartRecordingAsync(m_VideoPath, OnStartedRecordingVideo);
+                m_VideoCapture.StartRecordingAsync(VideoSavePath, OnStartedRecordingVideo);
             }
-           
+
             m_VideoCapture.GetContext().GetBehaviour().CaptureCamera.cullingMask = m_CullingMask.value;
 
             if (m_PreviewRawImage != null)
@@ -523,17 +434,12 @@ namespace Unity.XR.XREAL.Samples
         {
             Debug.Log("Stopped Video Capture Mode!");
             RefreshUIState();
-       
-            if (m_SavedLocal)
-            {
-                var encoder = m_VideoCapture.GetContext().GetEncoder() as VideoEncoder;
-                string path = encoder.EncodeConfig.outPutPath;
-                string filename = string.Format("TruVideo_{0}.mp4", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString());
 
-                StartCoroutine(DelayInsertVideoToGallery(path, filename, "Record"));
-                m_SavedLocal = false;
-            }
-           
+            var encoder = m_VideoCapture.GetContext().GetEncoder() as VideoEncoder;
+            string path = encoder.EncodeConfig.outPutPath;
+            string filename = string.Format("TruVideo_{0}.mp4", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString());
+
+            StartCoroutine(DelayInsertVideoToGallery(path, filename, "Record"));
 
             // Release video capture resource.
             m_VideoCapture.Dispose();

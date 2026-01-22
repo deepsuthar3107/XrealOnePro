@@ -31,17 +31,14 @@ namespace Unity.XR.XREAL.Samples.NetWork
             base.Awake();
 
             client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
-            client.EnableBroadcast = true;
-
-            endpoint = new IPEndPoint(IPAddress.Broadcast, BroadCastPort);
+            endpoint = new IPEndPoint(IPAddress.Parse("255.255.255.255"), BroadCastPort);
         }
 
-
-        /*  public LocalServerSearcher()
-          {
-              client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
-              endpoint = new IPEndPoint(IPAddress.Parse("255.255.255.255"), BroadCastPort);
-          }*/
+      /*  public LocalServerSearcher()
+        {
+            client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
+            endpoint = new IPEndPoint(IPAddress.Parse("255.255.255.255"), BroadCastPort);
+        }*/
 
         public void Search(OnGetSearchResult callback)
         {
@@ -66,6 +63,7 @@ namespace Unity.XR.XREAL.Samples.NetWork
         {
             if (m_TimeOutCoroutine != null)
             {
+                Debug.Log("[LocalServerSearcher] StopTimeOutCoroutine");
                 StopCoroutine(m_TimeOutCoroutine);
                 m_TimeOutCoroutine = null;
             }
@@ -80,34 +78,37 @@ namespace Unity.XR.XREAL.Samples.NetWork
 
         private void RecvThread()
         {
-            IPEndPoint remote = new IPEndPoint(IPAddress.Any, BroadCastPort);
+            IPEndPoint endpoint = new IPEndPoint(IPAddress.Any, BroadCastPort);
 
             while (true)
             {
                 try
                 {
-                    byte[] buf = client.Receive(ref remote);
+                    byte[] buf = client.Receive(ref endpoint);
                     string data = Encoding.Default.GetString(buf);
 
-                    if (string.IsNullOrEmpty(data))
-                        continue;
+                    if (!string.IsNullOrEmpty(data))
+                    {
+                        string[] param = data.Split(':');
+                        if (param.Length == 2)
+                        {
+                            var server = new IPEndPoint(
+                                IPAddress.Parse(param[0]),
+                                int.Parse(param[1])
+                            );
 
-                    string[] param = data.Split(':');
-                    if (param.Length != 2)
-                        continue;
-
-                    IPEndPoint server =
-                        new IPEndPoint(IPAddress.Parse(param[0]), int.Parse(param[1]));
-
-                    Response(server);
+                            XREALMainThreadDispatcher.Singleton.QueueOnMainThread(() =>
+                            {
+                                m_LocalServer = server;
+                                Response(m_LocalServer);
+                                TryStopTimeOutCoroutine();
+                            });
+                        }
+                    }
                 }
-                catch (SocketException)
+                catch (Exception e)
                 {
-                    return;
-                }
-                catch (Exception)
-                {
-                    return;
+                    Debug.LogException(e);
                 }
             }
         }
@@ -131,13 +132,14 @@ namespace Unity.XR.XREAL.Samples.NetWork
 
         private void Response(IPEndPoint endpoint)
         {
+            if (m_Tasks.Count == 0)
+                return;
+
+            if (XREALMainThreadDispatcher.Singleton == null)
+                return;
+
             XREALMainThreadDispatcher.Singleton.QueueOnMainThread(() =>
             {
-                TryStopTimeOutCoroutine();
-
-                if (m_Tasks.Count == 0)
-                    return;
-
                 ServerInfoResult result = new ServerInfoResult
                 {
                     endPoint = endpoint,
@@ -146,14 +148,30 @@ namespace Unity.XR.XREAL.Samples.NetWork
 
                 lock (m_Tasks)
                 {
-                    while (m_Tasks.Count > 0)
-                    {
-                        var cb = m_Tasks.Dequeue();
-                        cb?.Invoke(result);
-                    }
+                    if (m_Tasks.Count == 0)
+                        return;
+
+                    var callback = m_Tasks.Dequeue();
+                    callback?.Invoke(result);
                 }
             });
         }
-    }
+        protected override void OnDestroy()
+        {
+            // Stop receive thread safely
+            if (m_ReceiveThread != null)
+            {
+                m_ReceiveThread.Abort();
+                m_ReceiveThread = null;
+            }
 
+            // Close UDP client
+            client?.Close();
+            client = null;
+
+            base.OnDestroy();
+        }
+
+
+    }
 }

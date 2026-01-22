@@ -10,202 +10,278 @@ namespace Unity.XR.XREAL.Samples.NetWork
     /// <summary> An observer view net worker. </summary>
     public class NetWorkBehaviour
     {
-        /// <summary> The net work client. </summary>
         protected NetWorkClient m_NetWorkClient;
 
-        /// <summary> The limit waitting time. </summary>
         private const float limitWaittingTime = 5f;
-        /// <summary> True if is connected, false if not. </summary>
+
         private bool m_IsConnected = false;
-        /// <summary> True if is jonin success, false if not. </summary>
         private bool m_IsJoninSuccess = false;
-        /// <summary> True if is closed, false if not. </summary>
         private bool m_IsClosed = false;
+
         private Coroutine checkServerAvailableCoroutine = null;
-        private Dictionary<ulong, Action<JsonData>> _ResponseEvents = new Dictionary<ulong, Action<JsonData>>();
+
+        private Dictionary<ulong, Action<JsonData>> _ResponseEvents =
+            new Dictionary<ulong, Action<JsonData>>();
+
+        // ===================== RECONNECT CONFIG =====================
+        private bool m_EnableAutoReconnect = true;
+        private int m_ReconnectRetryCount = 0;
+        private const int MaxReconnectRetry = 15;
+        private const float ReconnectDelay = 2f;
+
+        private string m_LastIP;
+        private int m_LastPort;
+        // ============================================================
 
         public virtual void Listen()
         {
-            if (m_NetWorkClient == null)
-            {
-                m_NetWorkClient = new NetWorkClient();
-                m_NetWorkClient.OnDisconnect += OnDisconnect;
-                m_NetWorkClient.OnConnect += OnConnected;
-                m_NetWorkClient.OnJoinRoomResult += OnJoinRoomResult;
-                m_NetWorkClient.OnMessageResponse += OnMessageResponse;
-            }
+            if (m_NetWorkClient != null) return;
+
+            m_NetWorkClient = new NetWorkClient();
+            m_NetWorkClient.OnDisconnect += OnDisconnect;
+            m_NetWorkClient.OnConnect += OnConnected;
+            m_NetWorkClient.OnJoinRoomResult += OnJoinRoomResult;
+            m_NetWorkClient.OnMessageResponse += OnMessageResponse;
         }
+
+        public bool IsNetworkConnected => m_IsConnected;
+
+        #region Message Handling
 
         private void OnMessageResponse(byte[] data)
         {
             ulong msgid = BitConverter.ToUInt64(data, 0);
 
-            Action<JsonData> callback;
-            if (!_ResponseEvents.TryGetValue(msgid, out callback))
+            if (!_ResponseEvents.TryGetValue(msgid, out var callback))
             {
-                Debug.LogWarning("[NetWorkBehaviour] can not find the msgid bind event:" + msgid);
+                Debug.LogWarning("[NetWorkBehaviour] Unknown msgid: " + msgid);
                 return;
             }
 
-            // Remove the header to get the msg.
             byte[] result = new byte[data.Length - sizeof(ulong)];
             Array.Copy(data, sizeof(ulong), result, 0, result.Length);
+
             string json = Encoding.UTF8.GetString(result);
             callback?.Invoke(JsonMapper.ToObject(json));
-            Debug.Log("[NetWorkBehaviour] OnMessageResponse hit...");
             _ResponseEvents.Remove(msgid);
         }
 
-        /// <summary> Check server available. </summary>
-        /// <param name="ip">       The IP.</param>
-        /// <param name="callback"> The callback.</param>
+        #endregion
+
+        #region Connection Logic
+
         public void CheckServerAvailable(string ip, int port, Action<bool> callback)
         {
             if (string.IsNullOrEmpty(ip))
             {
                 callback?.Invoke(false);
+                return;
             }
-            else
+
+            m_LastIP = ip;
+            m_LastPort = port;
+
+            if (checkServerAvailableCoroutine != null)
             {
-                if (checkServerAvailableCoroutine != null)
-                {
-                    XREALMainThreadDispatcher.Singleton.StopCoroutine(checkServerAvailableCoroutine);
-                }
-                checkServerAvailableCoroutine = XREALMainThreadDispatcher.Singleton.StartCoroutine(CheckServerAvailableCoroutine(ip, port, callback));
+                XREALMainThreadDispatcher.Singleton
+                    .StopCoroutine(checkServerAvailableCoroutine);
             }
+
+            checkServerAvailableCoroutine =
+                XREALMainThreadDispatcher.Singleton.StartCoroutine(
+                    CheckServerAvailableCoroutine(ip, port, callback));
         }
 
-        /// <summary> Check server available coroutine. </summary>
-        /// <param name="ip">       The IP.</param>
-        /// <param name="callback"> The callback.</param>
-        /// <returns> An IEnumerator. </returns>
-        private IEnumerator CheckServerAvailableCoroutine(string ip, int port, Action<bool> callback)
+        private IEnumerator CheckServerAvailableCoroutine(
+            string ip, int port, Action<bool> callback)
         {
-            Debug.Log($"[ObserverView] CheckServerAvailableCoroutine: {ip}:{port}");
-            // Start to connect the server.
+            Debug.Log($"[NetWorkBehaviour] Connecting {ip}:{port}");
+
+            Listen();
             m_NetWorkClient.Connect(ip, port);
-            float timeLast = 0;
+
+            float time = 0;
             while (!m_IsConnected)
             {
-                if (timeLast > limitWaittingTime || m_IsClosed)
+                if (time > limitWaittingTime || m_IsClosed)
                 {
-                    Debug.Log("[ObserverView] Connect the server TimeOut!");
                     callback?.Invoke(false);
                     yield break;
                 }
-                timeLast += Time.deltaTime;
-                yield return new WaitForEndOfFrame();
+
+                time += Time.deltaTime;
+                yield return null;
             }
-            // Start to enter the room.
+
             m_NetWorkClient.EnterRoomRequest();
 
-            timeLast = 0;
+            time = 0;
             while (!m_IsJoninSuccess)
             {
-                if (timeLast > limitWaittingTime || m_IsClosed)
+                if (time > limitWaittingTime || m_IsClosed)
                 {
-                    Debug.Log("[ObserverView] Join the server TimeOut!");
                     callback?.Invoke(false);
                     yield break;
                 }
-                timeLast += Time.deltaTime;
-                yield return new WaitForEndOfFrame();
+
+                time += Time.deltaTime;
+                yield return null;
             }
+
             callback?.Invoke(true);
         }
 
+        #endregion
+
+        #region Send Message
+
         public void SendMsg(JsonData data, Action<JsonData> onResponse, float timeout = 3)
         {
-            XREALMainThreadDispatcher.Singleton.StartCoroutine(SendMessage(data, onResponse, timeout));
+            XREALMainThreadDispatcher.Singleton
+                .StartCoroutine(SendMessage(data, onResponse, timeout));
         }
 
-        private IEnumerator SendMessage(JsonData data, Action<JsonData> onResponse, float timeout)
+        private IEnumerator SendMessage(JsonData data,
+            Action<JsonData> onResponse, float timeout)
         {
             if (data == null)
             {
-                Debug.LogError("[NetWorkBehaviour] data is null!");
+                Debug.LogError("[NetWorkBehaviour] data is null");
                 yield break;
             }
 
-            // Add msgid(current timestamp) as the header.
             ulong msgid = (ulong)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            byte[] json_data = Encoding.UTF8.GetBytes(data.ToJson());
-            byte[] total_data = new byte[json_data.Length + sizeof(ulong)];
-            Array.Copy(BitConverter.GetBytes(msgid), 0, total_data, 0, sizeof(ulong));
-            Array.Copy(json_data, 0, total_data, sizeof(ulong), json_data.Length);
+            byte[] json = Encoding.UTF8.GetBytes(data.ToJson());
+
+            byte[] packet = new byte[json.Length + sizeof(ulong)];
+            Array.Copy(BitConverter.GetBytes(msgid), 0, packet, 0, sizeof(ulong));
+            Array.Copy(json, 0, packet, sizeof(ulong), json.Length);
 
             if (onResponse != null)
             {
-                Action<JsonData> onResult;
-                AsyncTask<JsonData> asyncTask = new AsyncTask<JsonData>(out onResult);
-                _ResponseEvents[msgid] = onResult;
-                m_NetWorkClient.SendMessage(total_data);
+                AsyncTask<JsonData> task =
+                    new AsyncTask<JsonData>(out var callback);
 
-                XREALMainThreadDispatcher.Singleton.StartCoroutine(SendMsgTimeOut(msgid, timeout));
-                yield return asyncTask.WaitForCompletion();
+                _ResponseEvents[msgid] = callback;
+                m_NetWorkClient.SendMessage(packet);
 
-                onResponse?.Invoke(asyncTask.Result);
+                XREALMainThreadDispatcher.Singleton
+                    .StartCoroutine(SendMsgTimeout(msgid, timeout));
+
+                yield return task.WaitForCompletion();
+                onResponse?.Invoke(task.Result);
             }
             else
             {
-                m_NetWorkClient.SendMessage(total_data);
+                m_NetWorkClient.SendMessage(packet);
             }
         }
 
-        private IEnumerator SendMsgTimeOut(UInt64 id, float timeout)
+        private IEnumerator SendMsgTimeout(ulong id, float timeout)
         {
             yield return new WaitForSeconds(timeout);
 
-            Action<JsonData> callback;
-            if (_ResponseEvents.TryGetValue(id, out callback))
+            if (_ResponseEvents.TryGetValue(id, out var callback))
             {
-                Debug.LogWarningFormat("[NetWorkBehaviour] Send msg timeout, id:{0}", id);
-                JsonData json = new JsonData();
-                json["success"] = false;
-                callback?.Invoke(json);
+                JsonData fail = new JsonData();
+                fail["success"] = false;
+                callback?.Invoke(fail);
+                _ResponseEvents.Remove(id);
             }
         }
 
-        #region Net msg
-        /// <summary> Executes the 'connected' action. </summary>
-        private void OnConnected()
-        {
-            Debug.Log("[NetWorkBehaviour] OnConnected...");
-            m_IsConnected = true;
-        }
-
-        /// <summary> Executes the 'disconnect' action. </summary>
-        private void OnDisconnect()
-        {
-            Debug.Log("[NetWorkBehaviour] OnDisconnect...");
-            this.Close();
-        }
-
-        /// <summary> Executes the 'join room result' action. </summary>
-        /// <param name="result"> True to result.</param>
-        private void OnJoinRoomResult(bool result)
-        {
-            Debug.Log("[NetWorkBehaviour] OnJoinRoomResult :" + result);
-            m_IsJoninSuccess = result;
-            if (!result)
-            {
-                this.Close();
-            }
-        }
         #endregion
 
-        /// <summary> Closes this object. </summary>
-        public virtual void Close()
+        #region Network Events
+
+        private void OnConnected()
         {
-            if (checkServerAvailableCoroutine != null)
+            Debug.Log("[NetWorkBehaviour] Connected");
+            m_IsConnected = true;
+            m_ReconnectRetryCount = 0;
+        }
+
+        private void OnDisconnect()
+        {
+            Debug.Log("[NetWorkBehaviour] Disconnected");
+            m_IsConnected = false;
+            m_IsJoninSuccess = false;
+
+            if (!m_IsClosed && m_EnableAutoReconnect)
             {
-                XREALMainThreadDispatcher.Singleton.StopCoroutine(checkServerAvailableCoroutine);
+                TryReconnect();
             }
-            m_NetWorkClient.ExitRoomRequest();
+        }
+
+        private void OnJoinRoomResult(bool result)
+        {
+            Debug.Log("[NetWorkBehaviour] JoinRoom: " + result);
+            m_IsJoninSuccess = result;
+
+            if (!result)
+                OnDisconnect();
+        }
+
+        #endregion
+
+        #region Reconnect Logic
+
+        private void TryReconnect()
+        {
+            if (m_ReconnectRetryCount >= MaxReconnectRetry)
+            {
+                Debug.LogError("[NetWorkBehaviour] Max reconnect retries reached");
+                return;
+            }
+
+            m_ReconnectRetryCount++;
+            Debug.Log($"[NetWorkBehaviour] Reconnect attempt {m_ReconnectRetryCount}");
+
+            XREALMainThreadDispatcher.Singleton
+                .StartCoroutine(ReconnectCoroutine());
+        }
+
+        private IEnumerator ReconnectCoroutine()
+        {
+            yield return new WaitForSeconds(ReconnectDelay);
+
             m_NetWorkClient?.Dispose();
             m_NetWorkClient = null;
-            checkServerAvailableCoroutine = null;
-            m_IsClosed = true;
+
+            m_IsClosed = false;
+            m_IsConnected = false;
+            m_IsJoninSuccess = false;
+
+            CheckServerAvailable(m_LastIP, m_LastPort, success =>
+            {
+                if (!success)
+                    TryReconnect();
+            });
         }
+
+        #endregion
+
+        #region Close
+
+        public virtual void Close()
+        {
+            Debug.Log("[NetWorkBehaviour] Closed intentionally");
+
+            m_IsClosed = true;
+            m_EnableAutoReconnect = false;
+            m_ReconnectRetryCount = 0;
+
+            if (checkServerAvailableCoroutine != null)
+            {
+                XREALMainThreadDispatcher.Singleton
+                    .StopCoroutine(checkServerAvailableCoroutine);
+            }
+
+            m_NetWorkClient?.ExitRoomRequest();
+            m_NetWorkClient?.Dispose();
+            m_NetWorkClient = null;
+        }
+
+        #endregion
     }
 }
