@@ -26,10 +26,9 @@ namespace Unity.XR.XREAL.Samples
         }
 
         public FirstPersonStreammingCast firstPersonStreamming;
+        public VideoUploadBackend videoUploadBackend;
 
         [Header("Backend Settings")]
-        public TextMeshProUGUI DebugTxt;
-        [SerializeField] private string backendUploadUrl = "https://api.example.com/upload/video";
         [SerializeField] private bool autoUploadToBackend = true;
 
 
@@ -440,6 +439,11 @@ namespace Unity.XR.XREAL.Samples
             string filename = string.Format("TruVideo_{0}.mp4", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString());
 
             StartCoroutine(DelayInsertVideoToGallery(path, filename, "Record"));
+            //  StartCoroutine(DelayInsertVideoToGallery(path, filename, "TruVideo Recordings"));
+          
+            string actualPath = "/storage/emulated/0/Movies/Record"; // Android folder where video is saved
+            ActualPath = Path.Combine(actualPath, Path.GetFileName(filename));
+
 
             // Release video capture resource.
             m_VideoCapture.Dispose();
@@ -460,15 +464,10 @@ namespace Unity.XR.XREAL.Samples
         IEnumerator DelayInsertVideoToGallery(string originFilePath, string displayName, string folderName)
         {
             yield return new WaitForSeconds(0.1f);
-            InsertVideoToGallery(originFilePath, displayName, folderName);
-
-            // Upload to backend if enabled
-            if (autoUploadToBackend)
-            {
-                StartCoroutine(UploadVideoToBackend(originFilePath, displayName));
-            }
+            InsertVideoToGallery(originFilePath, displayName, folderName);  
         }
 
+        string ActualPath;
         public void InsertVideoToGallery(string originFilePath, string displayName, string folderName)
         {
             Debug.LogFormat("InsertVideoToGallery: {0}, {1} => {2}", displayName, originFilePath, folderName);
@@ -476,113 +475,17 @@ namespace Unity.XR.XREAL.Samples
             {
                 galleryDataTool = new GalleryDataProvider();
             }
-
             galleryDataTool.InsertVideo(originFilePath, displayName, folderName);
+
+            // Upload to backend if enabled
+            if (!autoUploadToBackend || videoUploadBackend == null)
+            {
+                return;
+            }
+            videoUploadBackend.UploadRecordedVideo(ActualPath);
         }
 
-        /// <summary> Uploads video to backend server. </summary>
-        /// <param name="filePath">Path to the video file</param>
-        /// <param name="fileName">Name of the file</param>
-        IEnumerator UploadVideoToBackend(string filePath, string fileName)
-        {
-            Debug.Log($"[Backend Upload] Starting upload for: {fileName}");
-
-            if (!File.Exists(filePath))
-            {
-                Debug.LogError($"[Backend Upload] File not found: {filePath}");
-                DebugTxt.text = $"[Backend Upload] File not found: {filePath}";
-                yield break;
-            }
-
-            // Read the video file
-            byte[] videoData = null;
-            try
-            {
-                videoData = File.ReadAllBytes(filePath);
-                Debug.Log($"[Backend Upload] File size: {videoData.Length / 1024}KB");
-                DebugTxt.text = $"[Backend Upload] File size: {videoData.Length / 1024}KB";
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[Backend Upload] Failed to read file: {e.Message}");
-                DebugTxt.text = $"[Backend Upload] Failed to read file: {e.Message}";
-                yield break;
-            }
-
-            // Create multipart form data
-            WWWForm form = new WWWForm();
-            form.AddBinaryData("video", videoData, fileName, "video/mp4");
-            form.AddField("timestamp", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString());
-            form.AddField("deviceId", SystemInfo.deviceUniqueIdentifier);
-            form.AddField("resolution", resolutionLevel.ToString());
-            form.AddField("blendMode", blendMode.ToString());
-
-            // Send the request
-            using (UnityWebRequest www = UnityWebRequest.Post(backendUploadUrl, form))
-            {
-                // Set timeout (30 seconds)
-                www.timeout = 30;
-
-                Debug.Log($"[Backend Upload] Uploading to: {backendUploadUrl}");
-                DebugTxt.text = $"[Backend Upload] Uploading to: {backendUploadUrl}";
-
-                // Start the upload
-                yield return www.SendWebRequest();
-
-                // Check for errors
-                if (www.result == UnityWebRequest.Result.Success)
-                {
-                    Debug.Log($"[Backend Upload] Upload successful! Response: {www.downloadHandler.text}");
-                    DebugTxt.text = $"[Backend Upload] Upload successful! Response: {www.downloadHandler.text}";
-                    OnVideoUploadSuccess(fileName, www.downloadHandler.text);
-                }
-                else
-                {
-                    Debug.LogError($"[Backend Upload] Upload failed! Error: {www.error}");
-                    Debug.LogError($"[Backend Upload] Response Code: {www.responseCode}");
-                    DebugTxt.text = $"[Backend Upload] Upload failed! Error: {www.error}";
-                    DebugTxt.text += $"[Backend Upload] Response Code: {www.responseCode}";
-
-                    OnVideoUploadFailed(fileName, www.error);
-                }
-            }
-        }
-
-        /// <summary> Called when video upload succeeds. </summary>
-        void OnVideoUploadSuccess(string fileName, string response)
-        {
-            Debug.Log($"[Backend Upload] Successfully uploaded {fileName}");
-            DebugTxt.text = $"[Backend Upload] Successfully uploaded {fileName}";
-            // You can add additional logic here, such as:
-            // - Updating UI
-            // - Deleting local file if no longer needed
-            // - Sending analytics
-        }
-
-        /// <summary> Called when video upload fails. </summary>
-        void OnVideoUploadFailed(string fileName, string error)
-        {
-            Debug.LogWarning($"[Backend Upload] Failed to upload {fileName}: {error}");
-            DebugTxt.text = $"[Backend Upload] Failed to upload {fileName}: {error}";
-            // You can add retry logic or queue for later upload
-        }
-
-        /// <summary> Manually trigger upload of a specific video file. </summary>
-        /// <param name="filePath">Full path to the video file</param>
-        public void ManualUploadVideo(string filePath)
-        {
-            if (File.Exists(filePath))
-            {
-                string fileName = Path.GetFileName(filePath);
-                StartCoroutine(UploadVideoToBackend(filePath, fileName));
-            }
-            else
-            {
-                Debug.LogError($"[Backend Upload] File not found for manual upload: {filePath}");
-            }
-        }
-
-        /// <summary> Use this for initialization. </summary>
+      
         void CreatePhotoCapture(Action<XREALPhotoCapture> onCreated)
         {
             if (m_PhotoCapture != null)
