@@ -13,7 +13,7 @@ PlayerSettings:
   useOnDemandResources: 0
   accelerometerFrequency: 60
   companyName: Exposit
-  productName: BackendTest
+  productName: TruVideo
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -145,9 +145,6 @@ PlayerSettings:
   bundleVersion: 0.1
   preloadedAssets:
   - {fileID: -944628639613478452, guid: c348712bda248c246b8c49b3db54643f, type: 3}
-  - {fileID: 11400000, guid: b63a3850420138044927e6bd180a9a37, type: 2}
-  - {fileID: 11400000, guid: a00ad04bb9a4e5841b8eaa5361b488fe, type: 2}
-  - {fileID: 6590714178206499191, guid: ca418b44cfb0a8549b2b3639f343cbdf, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   m_HolographicPauseOnTrackingLoss: 1
@@ -168,7 +165,7 @@ PlayerSettings:
   androidSupportedAspectRatio: 1
   androidMaxAspectRatio: 2.1
   applicationIdentifier:
-    Android: com.Exposit.BackendTest
+    Android: com.Exposit.TruVideo
     Standalone: com.Exposit.TruVideo
   buildNumber:
     Standalone: 0
@@ -185,7 +182,7 @@ PlayerSettings:
   iPhoneStrippingLevel: 3
   iPhoneScriptCallOptimization: 0
   ForceInternetPermission: 0
-  ForceSDCardPermission: 1
+  ForceSDCardPermission: 0
   CreateWallpaper: 0
   APKExpansionFiles: 0
   keepLoadedShadersAlive: 0

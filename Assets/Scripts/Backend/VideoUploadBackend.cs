@@ -1,11 +1,13 @@
-﻿using UnityEngine;
-using UnityEngine.Networking;
-using System;
+﻿using System;
 using System.Collections;
 using System.IO;
 using System.Text;
-using UnityEngine.Video;
 using TMPro;
+using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.Video;
+using UnityEngine.XR;
+using static UnityEngine.LightProbeProxyVolume;
 
 public class VideoUploadBackend : MonoBehaviour
 {
@@ -57,7 +59,7 @@ public class VideoUploadBackend : MonoBehaviour
     public void TestGeneratePresigned() 
     { 
         RecordedVideoInfo info = new RecordedVideoInfo 
-        { filePath = "C:/Users/HP/Downloads/TruVideo_1768045738397.mp4", 
+        { filePath = "C:/Users/HP/Downloads/3195394-sd_426_240_25fps.mp4", 
             fileName = "TruVideo_1768045738397.mp4", 
             fileSize = 65, 
             duration = 10 };
@@ -70,7 +72,7 @@ public class VideoUploadBackend : MonoBehaviour
     {
         if (IsTokenValid())
         {
-            progressText.text = "Login Successed";
+            progressText.text = "Login Success" + PlayerPrefs.GetString("TOKEN_KEY");
             return;
         }
 
@@ -106,7 +108,7 @@ public class VideoUploadBackend : MonoBehaviour
             filePath = currentVideoPath,
             fileName = fi.Name,
             fileSize = fi.Length,
-            duration = (float)videoPlayer.length
+            duration = (int)videoPlayer.length
         };
 
         LogUI($"📄 Video Ready\nName: {info.fileName}\nSize: {info.fileSize / (1024f * 1024f):0.00} MB\nDuration: {info.duration:0.0}s");
@@ -178,7 +180,7 @@ public class VideoUploadBackend : MonoBehaviour
         PlayerPrefs.SetString(TOKEN_TIME_KEY, DateTime.UtcNow.Ticks.ToString());
         PlayerPrefs.Save();
 
-        progressText.text = "Login Success";
+        progressText.text = "Login Success" + PlayerPrefs.GetString("TOKEN_KEY");
         LogUI("✅ Login success");
         onSuccess?.Invoke();
     }
@@ -187,61 +189,93 @@ public class VideoUploadBackend : MonoBehaviour
 
     #region ================= PRESIGNED URL =================
 
+    public string _token;
     IEnumerator GeneratePresignedUrlCoroutine(RecordedVideoInfo info)
     {
         LogUI("📝 Requesting presigned URL...");
+
         string token = PlayerPrefs.GetString(TOKEN_KEY);
+        _token = token;
         if (string.IsNullOrEmpty(token))
         {
-            Debug.LogError("Login required first.");
+            LogUI("❌ Login required first");
             yield break;
         }
 
+        // ❗ API PATH CANNOT CHANGE
         string url = baseUrl + "/videos/generate-presigned-url";
 
         string json = $@"{{
-            ""fileDetails"": [{{
-                ""fileName"": ""{info.fileName}"",
-                ""duration"": {info.duration},
-                ""fileSize"": {info.fileSize}
-            }}],
-            ""licensePlateId"": ""{licensePlateId}""
-        }}";
+        ""fileDetails"": [{{
+            ""fileName"": ""{info.fileName}"",
+            ""duration"": {info.duration},
+            ""fileSize"": {info.fileSize}
+        }}],
+        ""licensePlateId"": ""{licensePlateId}""
+    }}";
 
-        UnityWebRequest request = new UnityWebRequest(url, "POST");
-        request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-        request.downloadHandler = new DownloadHandlerBuffer();
-        request.SetRequestHeader("Content-Type", "application/json");
-        request.SetRequestHeader("Authorization", "Bearer " + token);
-        request.SetRequestHeader("User-Agent", "Unity/2026");
-
-        yield return request.SendWebRequest();
-
-        LogUI("📥 Presigned Response: " + request.downloadHandler.text);
-
-        if (request.downloadHandler.text.StartsWith("<!DOCTYPE html>") || request.downloadHandler.text.Contains("Just a moment"))
+        using (UnityWebRequest request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
         {
-            Debug.LogError("Request blocked by Cloudflare. Use a server-side proxy.");
-            yield break;
+            request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+            request.downloadHandler = new DownloadHandlerBuffer();
+
+            request.SetRequestHeader("Content-Type", "application/json");
+            request.SetRequestHeader("Authorization", "Bearer " + token);
+
+            // ✅ ANDROID-SAFE USER AGENT
+            request.SetRequestHeader(
+                "User-Agent",
+                $"Unity/{Application.unityVersion} ({SystemInfo.operatingSystem})"
+            );
+
+            yield return request.SendWebRequest();
+
+            LogUI($"📥 Presigned Status: {request.responseCode}");
+            LogUI($"📥 Presigned Response: {request.downloadHandler.text}");
+
+            // 🚨 CLOUDFLARE DETECTION
+            if (request.responseCode == 403 ||
+                request.downloadHandler.text.Contains("Just a moment") ||
+                request.downloadHandler.text.Contains("<!DOCTYPE html>"))
+            {
+                LogUI("🚫 Blocked by Cloudflare (mobile clients are not allowed)");
+                LogUI("➡️ Presigned URL MUST be generated server-side");
+                yield break;
+            }
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                LogUI("❌ Presigned request failed: " + request.error);
+                yield break;
+            }
+
+            PresignedUrlResponse response;
+            try
+            {
+                response = JsonUtility.FromJson<PresignedUrlResponse>(request.downloadHandler.text);
+            }
+            catch (Exception e)
+            {
+                LogUI("❌ JSON parse error: " + e.Message);
+                yield break;
+            }
+
+            if (response?.data?.presignedUrls == null ||
+                response.data.presignedUrls.Length == 0)
+            {
+                LogUI("❌ No presigned URLs returned");
+                yield break;
+            }
+
+            PresignedItem item = response.data.presignedUrls[0];
+
+            LogUI("✅ Presigned URL received");
+            LogUI("🪣 S3 Key: " + item.s3FileKey);
+
+            StartCoroutine(UploadFileToS3(item.url, info.filePath, item.s3FileKey));
         }
-
-        if (request.responseCode < 200 || request.responseCode >= 300)
-        {
-            LogUI("❌ Presigned URL request failed");
-            yield break;
-        }
-
-        PresignedUrlResponse response = JsonUtility.FromJson<PresignedUrlResponse>(request.downloadHandler.text);
-
-        if (response.data.presignedUrls.Length == 0)
-        {
-            LogUI("❌ No presigned URLs returned");
-            yield break;
-        }
-
-        PresignedItem item = response.data.presignedUrls[0];
-        StartCoroutine(UploadFileToS3(item.url, info.filePath, item.s3FileKey));
     }
+
 
     #endregion
 
@@ -271,7 +305,7 @@ public class VideoUploadBackend : MonoBehaviour
         {
             SetProgress(1f);
             LogUI("✅ S3 upload completed");
-            StartCoroutine(UploadConfirmCoroutine(s3FileKey));
+            StartCoroutine(ConfirmUploadViaBackend(s3FileKey));
         }
         else
         {
@@ -283,78 +317,48 @@ public class VideoUploadBackend : MonoBehaviour
 
     #region ================= UPLOAD CONFIRM =================
 
-    IEnumerator UploadConfirmCoroutine(string s3FileKey)
+    IEnumerator ConfirmUploadViaBackend(string s3FileKey)
     {
-        LogUI("📡 Confirming upload with backend...");
-
-        if (string.IsNullOrEmpty(s3FileKey))
-        {
-            LogUI("❌ s3FileKey is null or empty");
-            yield break;
-        }
-
-        string token = PlayerPrefs.GetString(TOKEN_KEY);
         string url = baseUrl + "/videos/upload-confirm";
+        string token = PlayerPrefs.GetString("AccessToken");
 
-        UploadConfirmRequest confirmRequest = new UploadConfirmRequest
+        Debug.Log(token);
+        Debug.Log(s3FileKey);
+
+        var body = new ConfirmUploadRequest
         {
-            s3FileKeys = new string[] { s3FileKey }
+            s3FileKeys = new string[] { s3FileKey },
+            licensePlateId = licensePlateId
         };
 
-        string json = JsonUtility.ToJson(confirmRequest);
+        string json = JsonUtility.ToJson(body);
+        Debug.Log("Json " + json);
 
-        UnityWebRequest request = new UnityWebRequest(url, "POST");
-        request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-        request.downloadHandler = new DownloadHandlerBuffer();
-        request.SetRequestHeader("Content-Type", "application/json");
-        request.SetRequestHeader("Authorization", "Bearer " + token);
-
-        yield return request.SendWebRequest();
-
-        string responseText = request.downloadHandler.text;
-        LogUI("📥 Upload Confirm Response: " + responseText);
-
-        if (request.responseCode >= 200 && request.responseCode < 300)
+        using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
         {
-            try
+            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type", "application/json");
+            req.SetRequestHeader("Authorization", "Bearer " + token);
+
+            Debug.Log("REsponse: " + req);
+            Debug.Log("Header: " + req.GetRequestHeader("Authorization"));
+            yield return req.SendWebRequest();
+
+            Debug.Log("result: " + req.result);
+
+            if (req.result != UnityWebRequest.Result.Success)
             {
-                UploadConfirmResponse resp = JsonUtility.FromJson<UploadConfirmResponse>(responseText);
-                if (resp.success && resp.data.uploaded.Length > 0)
-                    LogUI("🎉 Upload confirmed successfully: " + string.Join(", ", resp.data.uploaded));
-                else
-                    LogUI("❌ Upload confirm failed: " + resp.message + " | Failed files: " + string.Join(", ", resp.data.failed));
+                Debug.LogError("❌ Confirm failed: " + req.error);
+                Debug.LogError(req.downloadHandler.text);
             }
-            catch (Exception e)
+            else
             {
-                LogUI("❌ Failed to parse upload confirm response: " + e);
+                Debug.Log("✅ Confirm success");
+                Debug.Log(req.downloadHandler.text);
             }
         }
-        else
-        {
-            LogUI($"❌ Upload confirm failed: {request.responseCode} {request.error}");
-        }
     }
-
-    [Serializable]
-    public class UploadConfirmRequest
-    {
-        public string[] s3FileKeys;
-    }
-
-    [Serializable]
-    public class UploadConfirmResponseData
-    {
-        public string[] uploaded;
-        public string[] failed;
-    }
-
-    [Serializable]
-    public class UploadConfirmResponse
-    {
-        public bool success;
-        public string message;
-        public UploadConfirmResponseData data;
-    }
-
     #endregion
+
 }
