@@ -25982,8 +25982,7 @@ MonoBehaviour:
   password: Test@12345678
   debugText: {fileID: 1210464011}
   progressText: {fileID: 1642409085}
-  showDebugUI: 1
-  _token: 
+  showDebugUI: 0
 --- !u!328 &1107701564
 VideoPlayer:
   m_ObjectHideFlags: 0

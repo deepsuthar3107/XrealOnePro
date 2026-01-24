@@ -6,9 +6,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.Video;
-using UnityEngine.XR;
-using static UnityEngine.LightProbeProxyVolume;
-
 public class VideoUploadBackend : MonoBehaviour
 {
     public VideoPlayer vp;
@@ -189,13 +186,11 @@ public class VideoUploadBackend : MonoBehaviour
 
     #region ================= PRESIGNED URL =================
 
-    public string _token;
     IEnumerator GeneratePresignedUrlCoroutine(RecordedVideoInfo info)
     {
         LogUI("📝 Requesting presigned URL...");
 
         string token = PlayerPrefs.GetString(TOKEN_KEY);
-        _token = token;
         if (string.IsNullOrEmpty(token))
         {
             LogUI("❌ Login required first");

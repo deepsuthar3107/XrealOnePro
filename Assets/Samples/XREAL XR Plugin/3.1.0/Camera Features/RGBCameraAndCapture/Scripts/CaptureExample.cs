@@ -362,15 +362,14 @@ namespace Unity.XR.XREAL.Samples
             CameraParameters cameraParameters = new CameraParameters();
             Resolution cameraResolution = GetResolutionByLevel(resolutionLevel);
             cameraParameters.cameraType = CameraType.RGB;
-            cameraParameters.hologramOpacity = 0.0f;
+            cameraParameters.hologramOpacity = 1f;
             cameraParameters.frameRate = NativeConstants.RECORD_FPS_DEFAULT;
             cameraParameters.cameraResolutionWidth = cameraResolution.width;
             cameraParameters.cameraResolutionHeight = cameraResolution.height;
-            cameraParameters.pixelFormat = CapturePixelFormat.PNG;
+            cameraParameters.pixelFormat = CapturePixelFormat.BGRA32;
             cameraParameters.blendMode = blendMode;
             cameraParameters.audioState = audioState;
-            cameraParameters.captureSide = captureside;
-            cameraParameters.backgroundColor = useGreenBackGround ? Color.green : Color.black;
+            cameraParameters.monophonic = true;
 
             if (m_NetWorker != null)
             {
