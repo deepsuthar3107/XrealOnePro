@@ -21,6 +21,7 @@ public class VideoUploadBackend : MonoBehaviour
     [Header("DEBUG UI (TMP)")]
     public TMP_Text debugText;
     public TMP_Text progressText;
+    public TMP_Text UploadingStatus;
     public bool showDebugUI = true;
 
     private const string TOKEN_KEY = "AccessToken";
@@ -91,7 +92,7 @@ public class VideoUploadBackend : MonoBehaviour
         vp.prepareCompleted += OnPrepared;
 
         LogUI("🎬 Preparing video...");
-        vp.Prepare();
+        vp.Prepare();    
     }
 
     void OnPrepared(VideoPlayer videoPlayer)
@@ -197,6 +198,7 @@ public class VideoUploadBackend : MonoBehaviour
             yield break;
         }
 
+        updateUploadingStatus("Video Is Uploading...");
         // ❗ API PATH CANNOT CHANGE
         string url = baseUrl + "/videos/generate-presigned-url";
 
@@ -350,10 +352,25 @@ public class VideoUploadBackend : MonoBehaviour
             else
             {
                 Debug.Log("✅ Confirm success");
+                updateUploadingStatus("Uploading Is Completed...");
+                StartCoroutine(DisableText());
                 Debug.Log(req.downloadHandler.text);
             }
         }
     }
     #endregion
 
+    IEnumerator DisableText()
+    {
+        yield return new WaitForSeconds(2);
+        updateUploadingStatus(null);
+    }
+
+    void updateUploadingStatus(string msg)
+    {
+        if(UploadingStatus != null)
+        {
+            UploadingStatus.text = msg;
+        }
+    }
 }
